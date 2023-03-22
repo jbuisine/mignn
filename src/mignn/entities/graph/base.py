@@ -7,11 +7,12 @@ from mignn.entities.connection.base import Connection
 
 class Graph(ABC):
     
-    def __init__(self):
-        
+    def __init__(self, targets):
+    
         self._nodes = []
         self._connections = []
-        
+        self._targets = targets
+    
     @property
     def nodes(self) -> List[Node]:
         return self._nodes
@@ -21,8 +22,21 @@ class Graph(ABC):
         return self._connections
     
     @property
+    def targets(self) -> List[float]:
+        return self._targets
+    
+    @property
     def data(self) -> tuple[List[List[float]], List[Connection]]:
-        return [ n.properties for n in self._nodes ], self._connections
+        # create prepare graph data
+        return {
+            'nodes': [ n.properties for n in self._nodes ], 
+            'edges': [ (self._nodes.index(con.from_node), \
+                self._nodes.index(con.to_node), con.properties) \
+                for con in self._connections 
+            ],
+            'targets': self._targets
+        }
+        
     
     def get_node_by_index(self, index) -> Node:
         

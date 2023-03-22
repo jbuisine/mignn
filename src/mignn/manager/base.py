@@ -9,8 +9,8 @@ class LightGraphManager():
         if len(light_graphs) < 2:
             return light_graphs[0]
         
-        # quick params copy
-        final_dict_graph = light_graphs[0].params_copy(light_graphs[0])
+        # quick from params init
+        final_dict_graph = light_graphs[0].from_params(light_graphs[0])
         
         for g_dict in light_graphs:
             

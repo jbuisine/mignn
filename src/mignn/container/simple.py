@@ -10,12 +10,11 @@ import random
 
 class SimpleLightGraphContainer(LightGraphContainer):
     
-    def __init__(self, variant: str='scalar_rgb'):
+    def __init__(self, scene_file: str, reference: np.ndarray=None, \
+        variant: str='scalar_rgb'):
         
-        super().__init__()
-        self._scene_file = None
-        self._reference = None
-        self._mi_variant = variant   
+        super().__init__(scene_file, reference, variant)
+ 
         
     def _build_pos_connections(self, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
         """
@@ -84,8 +83,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
             
         return False
         
-    @classmethod
-    def _extract_light_grath(cls, line):
+    def _extract_light_grath(self, line):
 
         data = line.replace('\n', '').split(';')
 

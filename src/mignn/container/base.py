@@ -14,7 +14,7 @@ class GraphContainer(ABC):
         # track the number of built connection (and hence duplicate nodes)
         self._n_built_connections = 0
         self._n_built_nodes = 0
-        self._graphs = {}    
+        self._graphs = {}
         
     @property
     def n_graphs(self) -> int:
@@ -65,6 +65,10 @@ class GraphContainer(ABC):
             if verbose:
                 print(f'Connections build {(idx + 1) / len(self.keys()) * 100.:.2f}%', end='\r')
             
+    
+    def _init_graphs(self, init_graphs: dict):
+        self._graphs = init_graphs
+        
     @abstractmethod
     def _build_pos_connections(self, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
         """
@@ -76,30 +80,16 @@ class GraphContainer(ABC):
     
     @classmethod
     @abstractmethod
-    def params_copy(cls, container):
+    def from_params(cls, container):
         pass
-        
-    @classmethod
-    def _init_from_keys(cls, container):
-        
-        container_instance = cls()
-        init_dict = dict(zip(container.keys(), [ [] for _ in container.keys() ]))
-        
-        # TODO: need to be improved
-        container_instance._graphs = init_dict
-        
-        return container_instance
-     
-    @classmethod
+            
     @abstractmethod
-    def _extract_light_grath(cls, line):
+    def _extract_light_grath(self, line):
         pass
 
-    @classmethod
-    def _load_fromfile(cls, filename: str, verbose: bool=True):
     
-        graph_container = cls()
-
+    def _load_fromfile(self, filename: str, verbose: bool=True, **kwargs):
+    
         with open(filename, 'r', encoding="utf-8") as f_light_path:
 
             lines = f_light_path.readlines()
@@ -107,14 +97,12 @@ class GraphContainer(ABC):
             step = n_lines // 100
             for idx, line in enumerate(lines):
 
-                pos, graph = cls._extract_light_grath(line)
-                graph_container.add_graph(pos, graph)
+                pos, graph = self._extract_light_grath(line)
+                self.add_graph(pos, graph)
 
                 if verbose and (idx % step == 0 or idx >= n_lines - 1):
                     print(f'Load of `{filename}` in progress: {(idx + 1) / n_lines * 100.:.2f}%', \
                           end='\r' if idx + 1 < n_lines else '\n')
-                
-        return graph_container
     
     def __str__(self):
         return f'[n_keys: {len(self._graphs.keys())}, n_graphs: {self.n_graphs}, n_nodes: {self.n_nodes} ' \
@@ -125,11 +113,12 @@ class GraphContainer(ABC):
 
 class LightGraphContainer(GraphContainer, ABC):
     
-    def __init__(self, variant: str='scalar_rgb'):
+    def __init__(self, scene_file: str, reference: np.ndarray=None, \
+        variant: str='scalar_rgb'):
         
         super().__init__()
-        self._scene_file = None
-        self._reference = None
+        self._scene_file = scene_file
+        self._reference = reference
         self._mi_variant = variant   
         
     @property
@@ -144,31 +133,21 @@ class LightGraphContainer(GraphContainer, ABC):
     def variant(self) -> str:
         return self._mi_variant
     
-    def __set_scene_file(self, scene_file: str):
-        self._scene_file = scene_file
+    @classmethod 
+    def from_params(cls, container):
         
-    def __set_reference(self, reference: np.ndarray):
-        self._reference = reference
-        
-    def __set_variant(self, variant: str):
-        self._mi_variant = variant
-        
-    @classmethod
-    def params_copy(cls, container):
-        
-        container_instance = cls._init_from_keys(container)
-        container_instance.__set_scene_file(container.scene_file)
-        container_instance.__set_reference(container.reference)
-        container_instance.__set_variant(container.variant)
+        # init same container with same expected keys but empty
+        container_instance = cls(container.scene_file, container.reference, container.variant)
+        empty_dict_keys = dict(zip(container.keys(), [ [] for _ in container.keys() ]))
+        container_instance._init_graphs(empty_dict_keys)
         
         return container_instance
        
     @classmethod
     def fromfile(cls, filename: str, scene_file: str, reference: np.ndarray=None, \
-        verbose: bool=True):
+        variant: str='scalar_rgb', verbose: bool=True):
         
-        graph_container = cls._load_fromfile(filename, verbose)
-        graph_container.__set_scene_file(scene_file)
-        graph_container.__set_reference(reference)
+        graph_container = cls(scene_file, reference, variant)
+        graph_container._load_fromfile(filename, verbose)
         
         return graph_container
