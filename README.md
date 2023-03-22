@@ -67,7 +67,7 @@ light_graphs = SimpleLightGraphContainer.fromfile('data/gnn_file_1.path', scene_
 >>> SimpleLightGraphContainer: [n_keys: 4096, n_graphs: 40960, n_nodes: 138231 (duplicate: 0), n_connections: 97271 (built: 0)]
 ```
 
-From the light graphs (obtained from multiple sample) increase knowledge:
+From the light graphs (obtained from multiple samples) increase knowledge:
 
 ```python
 light_graphs.build_connections(n_graphs=10, n_nodes_per_graphs=2, n_neighbors=5, verbose=True)

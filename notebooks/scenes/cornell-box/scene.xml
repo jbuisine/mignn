@@ -3,10 +3,10 @@
 	<default name="spp" value="5" />
 	<!--<default name="resy" value="1024" />
 	<default name="resx" value="1024" />-->
-    <default name="resy" value="64" />
-	<default name="resx" value="64" />
-	<default name="max_depth" value="3" />
-	<string name="logfile" value="gnn_file_2.data"/>
+    <default name="resy" value="4" />
+	<default name="resx" value="4" />
+	<default name="max_depth" value="10" />
+	<string name="logfile" value="gnn_file_1.data"/>
 	<integrator type="$integrator">
 		<integer name="max_depth" value="$max_depth" />
 	</integrator>
