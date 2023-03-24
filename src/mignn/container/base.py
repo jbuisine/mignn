@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 from mignn.entities.graph.base import Graph
 
 from typing import List
+from itertools import chain
+
 import numpy as np
 
 class GraphContainer(ABC):
@@ -33,11 +35,15 @@ class GraphContainer(ABC):
     def keys(self) -> List[str]:
         return self._graphs.keys()
     
-    def items(self):
+    def items(self) -> List[tuple[str, List[Graph]]]:
         return self._graphs.items()
     
-    def get_graphs(self, pos) -> Graph:
+    def graphs_at(self, pos: tuple[int, int]) -> List[Graph]:
         return self._graphs[pos]
+    
+    @property
+    def graphs(self) -> List[Graph]:
+        return list(chain(*[ v for _, v in self._graphs.items() ]))
     
     def add_graphs(self, pos: tuple[int, int], graphs: Graph) -> None:
         
@@ -56,21 +62,23 @@ class GraphContainer(ABC):
     
     # TODO: do the same function but with convolution
     def build_connections(self, n_graphs: int, n_nodes_per_graphs: int, n_neighbors: int, \
-        verbose: bool=False): 
+        verbose: bool=False) -> None: 
         
         for idx, (key, _) in enumerate(self._graphs.items()):
             
             self._build_pos_connections(key, n_graphs, n_nodes_per_graphs, n_neighbors)
             
             if verbose:
-                print(f'Connections build {(idx + 1) / len(self.keys()) * 100.:.2f}%', end='\r')
+                print(f'Connections build {(idx + 1) / len(self.keys()) * 100.:.2f}%', \
+                    end='\r' if idx + 1 < len(self.keys()) else '\n')
             
     
-    def _init_graphs(self, init_graphs: dict):
+    def _init_graphs(self, init_graphs: dict) -> None:
         self._graphs = init_graphs
         
     @abstractmethod
-    def _build_pos_connections(self, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
+    def _build_pos_connections(self, pos: tuple[int, int], n_graphs: int, \
+        n_nodes_per_graphs: int, n_neighbors: int):
         """
         For each position from current film, new connections are tempted to be build:
         - n_graphs: number of graphs to update
@@ -84,11 +92,10 @@ class GraphContainer(ABC):
         pass
             
     @abstractmethod
-    def _extract_light_grath(self, line):
+    def _extract_light_grath(self, line: str) -> Graph:
         pass
 
-    
-    def _load_fromfile(self, filename: str, verbose: bool=True, **kwargs):
+    def _load_fromfile(self, filename: str, verbose: bool=True):
     
         with open(filename, 'r', encoding="utf-8") as f_light_path:
 
@@ -104,7 +111,7 @@ class GraphContainer(ABC):
                     print(f'Load of `{filename}` in progress: {(idx + 1) / n_lines * 100.:.2f}%', \
                           end='\r' if idx + 1 < n_lines else '\n')
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f'[n_keys: {len(self._graphs.keys())}, n_graphs: {self.n_graphs}, n_nodes: {self.n_nodes} ' \
             f'(duplicate: {self._n_built_nodes}), n_connections: {self.n_connections} ' \
             f'(built: {self._n_built_connections})]'

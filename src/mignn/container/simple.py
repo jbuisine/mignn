@@ -3,6 +3,8 @@ from mignn.entities.graph import LightGraph
 from mignn.entities.node import RayNode
 from mignn.entities.connection import RayConnection
 
+from mignn.entities.connection import RayConnection, ConnectionTag
+
 import mitsuba as mi
 import numpy as np
 import math
@@ -70,12 +72,14 @@ class SimpleLightGraphContainer(LightGraphContainer):
                         if si.is_valid() and si.t >= math.dist(point, origin):
 
                             # add connection into current graph (from -> to)
-                            connection = RayConnection(node, neighbor_selected_node, {'distance': si.t})
+                            connection = RayConnection(node, neighbor_selected_node, \
+                                {'distance': si.t}, ConnectionTag.BUILT)
                             self._n_built_nodes += graph.add_node(neighbor_selected_node)
                             self._n_built_connections += graph.add_connection(connection)
 
                             # add connection into neighbor graph (to -> from)
-                            connection = RayConnection(neighbor_selected_node, node, {'distance': si.t})
+                            connection = RayConnection(neighbor_selected_node, node, \
+                                {'distance': si.t}, ConnectionTag.BUILT)
                             self._n_built_nodes += selected_graph.add_node(node)
                             self._n_built_connections += selected_graph.add_connection(connection)
                             
@@ -94,10 +98,15 @@ class SimpleLightGraphContainer(LightGraphContainer):
         normal = list(map(float, data[2].split(',')))
 
         # get luminance
-        obtained_luminance = list(map(float, data[-1].split(',')))
+        target_luminance = list(map(float, data[-1].split(',')))
 
         # prepare new graph
-        graph = LightGraph(position, obtained_luminance)
+        # TODO: use of reference image if exists
+        if self._reference is not None:
+            pos_x, pos_y = sample_pos
+            target_luminance = list(np.array(self._reference[pos_x, pos_y, :]))
+            
+        graph = LightGraph(position, target_luminance)
 
         # default origin node
         prev_node = RayNode(position, normal)
@@ -106,25 +115,29 @@ class SimpleLightGraphContainer(LightGraphContainer):
 
         del data[0:3]
         del data[-1]
-
+        
+        # cannot build connection (only one Node)
+        # There is no graph
         for _, node in enumerate(data):
             node_data = node.split('::')
 
             distance = float(node_data[0])
+            valid = float(node_data[1])
             # bsdf_weight = list(map(float, node_data[1].split(',')))
-            position = list(map(float, node_data[2].split(',')))
-            normal = list(map(float, node_data[3].split(',')))
+            position = list(map(float, node_data[3].split(',')))
+            normal = list(map(float, node_data[4].split(',')))
 
             node = RayNode(position, normal)
             graph.add_node(node)
             
             # build connection (unilateral)
-            connection = RayConnection(prev_node, node, {'distance': distance})
+            connection = RayConnection(prev_node, node, \
+                {'distance': distance, 'valid': valid}, ConnectionTag.ORIGINAL)
             graph.add_connection(connection)
 
             prev_node = node
         
         return sample_pos, graph
  
-    def __str__(self):
+    def __str__(self) -> str:
         return f'SimpleLightGraphContainer: {super().__str__()}'

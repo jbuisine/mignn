@@ -1,13 +1,35 @@
 """Abstract Graph"""
 from abc import ABC
 from typing import List
+from typing import NamedTuple
 
 from mignn.entities.node.base import Node
 from mignn.entities.connection.base import Connection
 
+import torch
+
+class GraphData(NamedTuple):
+    x: List[float]
+    edge_index: tuple[List[int], List[int]]
+    edge_attr: List[float] 
+    y: List[float]
+    edge_tag: List[int]
+    pos: List[tuple[float, float, float]] = None
+    
+    def to_torch(self):
+        
+        return GraphData(
+            edge_index = torch.tensor(self.edge_index, dtype=torch.long),
+            x = torch.tensor(self.x, dtype=torch.float),
+            edge_attr = torch.tensor([self.edge_attr], dtype=torch.float),
+            y = torch.tensor([self.y], dtype=torch.float),
+            pos = torch.tensor(self.pos, dtype=torch.float),
+            edge_tag = self.edge_tag
+        )
+
 class Graph(ABC):
     
-    def __init__(self, targets):
+    def __init__(self, targets: List[float]):
     
         self._nodes = []
         self._connections = []
@@ -26,18 +48,23 @@ class Graph(ABC):
         return self._targets
     
     @property
-    def data(self) -> tuple[List[List[float]], List[Connection]]:
+    def data(self) -> GraphData:
         # create prepare graph data
-        return {
-            'nodes': [ n.properties for n in self._nodes ], 
-            'edges': [ (self._nodes.index(con.from_node), \
-                self._nodes.index(con.to_node), con.properties) \
+        edges_data = [ (self._nodes.index(con.from_node), \
+                self._nodes.index(con.to_node), con.properties, con.tag) \
                 for con in self._connections 
-            ],
-            'targets': self._targets
-        }
+            ]
+        edges_from, edges_to, edges_properties, edges_tags = list(zip(*edges_data))
         
-    
+        return GraphData(
+            x = [ n.properties for n in self._nodes ],
+            edge_index = [edges_from, edges_to],
+            edge_attr = edges_properties,
+            y = self._targets,
+            edge_tag = edges_tags,
+            pos = [ n.position for n in self._nodes ]
+        )
+        
     def get_node_by_index(self, index) -> Node:
         
         if index < len(self._nodes):
@@ -94,5 +121,5 @@ class Graph(ABC):
         
         return False
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f'nodes: {self._nodes}, connections: {self._connections}]'

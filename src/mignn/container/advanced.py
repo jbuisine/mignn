@@ -142,5 +142,5 @@ class AdvancedLightGraphContainer(LightGraphContainer):
         
         return sample_pos, graph
  
-    def __str__(self):
+    def __str__(self) -> str:
         return f'SimpleLightGraphContainer: {super().__str__()}'

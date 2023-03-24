@@ -10,16 +10,21 @@ class LightGraphManager():
             return light_graphs[0]
         
         # quick from params init
+        # TODO: improve this part
         final_dict_graph = light_graphs[0].from_params(light_graphs[0])
         
-        for g_dict in light_graphs:
+        for g_container in light_graphs:
             
-            if not isinstance(g_dict, LightGraphContainer):
+            if not isinstance(g_container, LightGraphContainer):
                 continue
                 
-            if final_dict_graph.keys() == g_dict.keys():
+            if final_dict_graph.keys() == g_container.keys():
                 for k in final_dict_graph.keys():
-                    final_dict_graph.add_graphs(k, g_dict.get_graphs(k))
+                    final_dict_graph.add_graphs(k, g_container.graphs_at(k))
+                
+                # TODO: improve this part
+                final_dict_graph._n_built_nodes += g_container._n_built_nodes
+                final_dict_graph._n_built_connections += g_container._n_built_connections
                     
         return final_dict_graph
     
