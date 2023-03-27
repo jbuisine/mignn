@@ -17,4 +17,4 @@ class RayConnection(Connection):
     def properties(self) -> List[float]:
         """Get all properties describing this node
         """
-        return self._data['distance']
+        return [self._data['distance']]

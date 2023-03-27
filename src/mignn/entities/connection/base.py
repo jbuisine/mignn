@@ -34,6 +34,10 @@ class Connection(ABC):
         return self._tag
     
     @property
+    def data(self) -> dict:
+        return self._data
+    
+    @property
     @abstractmethod
     def properties(self) -> List[float]:
         """Get all properties describing this node
