@@ -18,3 +18,7 @@ class RayConnection(Connection):
         """Get all properties describing this node
         """
         return [self._data['distance']]
+    
+    def __str__(self):
+        return f'[from: {self.from_node}, to: {self.to_node}, \
+            properties: {self.properties}]'

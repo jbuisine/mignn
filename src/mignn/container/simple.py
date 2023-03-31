@@ -91,9 +91,11 @@ class SimpleLightGraphContainer(LightGraphContainer):
 
         data = line.replace('\n', '').split(';')
 
+        # TODO: need to reverse sample pos, check if always required or specific to scene
         # get origin
-        sample_pos = list(map(int, map(float, data[0].split(','))))
-        position = list(map(float, data[1].split(',')))
+        sample_pos = list(map(int, map(float, data[0].split(','))))[::-1]
+        
+        position = list(map(float, data[1].split(',')))[::-1]
         # simulated camera normal (direction vector)
         normal = list(map(float, data[2].split(',')))
 

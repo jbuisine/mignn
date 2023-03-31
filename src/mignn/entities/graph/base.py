@@ -22,7 +22,7 @@ class GraphData(NamedTuple):
             edge_index = torch.tensor(self.edge_index, dtype=torch.long),
             x = torch.tensor(self.x, dtype=torch.float),
             edge_attr = torch.tensor(self.edge_attr, dtype=torch.float),
-            y = torch.tensor([self.y], dtype=torch.float),
+            y = torch.tensor(self.y, dtype=torch.float),
             pos = torch.tensor(self.pos, dtype=torch.float),
             edge_tag = self.edge_tag
         )

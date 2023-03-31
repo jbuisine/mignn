@@ -33,10 +33,10 @@ class GraphContainer(ABC):
             for _, v in self._graphs.items() ])
     
     def keys(self) -> List[str]:
-        return self._graphs.keys()
+        return sorted(self._graphs.keys())
     
     def items(self) -> List[tuple[str, List[Graph]]]:
-        return self._graphs.items()
+        return sorted(self._graphs.items())
     
     def graphs_at(self, pos: tuple[int, int]) -> List[Graph]:
         return self._graphs[pos]
@@ -153,7 +153,7 @@ class LightGraphContainer(GraphContainer, ABC):
     @classmethod
     def fromfile(cls, filename: str, scene_file: str, reference: np.ndarray=None, \
         variant: str='scalar_rgb', verbose: bool=True):
-        
+
         graph_container = cls(scene_file, reference, variant)
         graph_container._load_fromfile(filename, verbose)
         

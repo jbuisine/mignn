@@ -90,6 +90,10 @@ class LightGraphManager():
                 # check connection and connect it from one origin node only
                 c_connection = None
                 
+                # do not use this kind of connection
+                if connection.from_node in origin_nodes and connection.to_node in origin_nodes:
+                    continue
+                
                 if connection.from_node in origin_nodes:
                     c_connection = RayConnection(random_origin_node, connection.to_node, \
                         connection.data, connection.tag)
