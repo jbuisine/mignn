@@ -5,7 +5,7 @@ import argparse
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 import uuid
-import time
+import random
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -26,7 +26,7 @@ from torchmetrics import R2Score
 
 from models.gcn_model import GNNL
 
-w_size, h_size = 32, 32
+w_size, h_size = 4, 4
 
 def load_sensor(r, phi, theta, target):
     # Apply two rotations to convert from spherical coordinates to world 3D coordinates.
@@ -121,10 +121,12 @@ def main():
 
     # TODO: add this part into library
     radius = 5
-    phis = [ 140 - (i*20) for i in range(sensor_count)]
-    theta = 22
+    
+    # phis = [ (140 - (i*20)) % 180 for i in range(sensor_count)]
+    # previous 22
+    angles = [ (random.uniform(0, 360), random.uniform(0, 360)) for _ in range(sensor_count) ]
 
-    sensors = [load_sensor(radius, phi, theta, [0, 1, 0]) for phi in phis]
+    sensors = [load_sensor(radius, phi, theta, [0, 1, 0]) for (phi, theta) in angles ]
 
     dataset_path = f'data/train/datasets/{output_name}'
     
@@ -132,7 +134,7 @@ def main():
         gnn_files, ref_images = prepare_data(scene_file, 
                                     max_depth = 5, 
                                     data_spp = 10, 
-                                    ref_spp = 1000, 
+                                    ref_spp = 10000, 
                                     sensors = sensors, 
                                     output_folder = f'data/train/generated/{output_name}')
         
@@ -144,8 +146,9 @@ def main():
             
         # build connections individually
         build_containers = []
-        for container in containers:
-            container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
+        for c_i, container in enumerate(containers):
+            print(f'File n°{c_i + 1} of {len(containers)}', end=" ")
+            container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)
             
