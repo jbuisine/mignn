@@ -11,7 +11,7 @@ mi.set_variant("scalar_rgb")
 from mignn.container import SimpleLightGraphContainer
 from mignn.manager import LightGraphManager
 from mignn.dataset import PathLightDataset
-from mignn.processing.embedding import signal_embedding
+from mignn.processing.encoder import signal_encoder
 
 import torch
 from torch_geometric.loader import DataLoader
@@ -22,6 +22,7 @@ from joblib import load as skload
 from models.gcn_model import GNNL
 
 w_size, h_size = 128, 128
+encoder_size = 6
 
 def load_sensor(r, phi, theta, target):
     # Apply two rotations to convert from spherical coordinates to world 3D coordinates.
@@ -83,14 +84,14 @@ def main():
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--model', type=str, help="where to find model", required=False, default=10)
     parser.add_argument('--output', type=str, help="output prediction folder", required=True)
-    parser.add_argument('--embedding', type=int, help="embedding data or not", required=False, default=False)
+    parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
     
     args = parser.parse_args()
     
     scene_file        = args.scene
     model_folder      = args.model
     output_name       = args.output
-    embedding_enabled = args.embedding
+    encoder_enabled   = args.encoder
 
     sensor_count = 6
     radius = 5
@@ -128,24 +129,15 @@ def main():
             for graph in graphs:
                 torch_data = graph.data.to_torch()
                 
-                # do embedding
-                if embedding_enabled:
-                    data = Data(x = signal_embedding(torch_data.x), 
-                            edge_index = torch_data.edge_index,
-                            y = torch_data.y,
-                            edge_attr = signal_embedding(torch_data.edge_attr),
-                            pos = torch_data.pos)
-                else:
-                    
-                    edge_attr = torch_data.edge_attr
-                    edge_attr[torch.isinf(torch_data.edge_attr)] = 0
+                edge_attr = torch_data.edge_attr
+                edge_attr[torch.isinf(torch_data.edge_attr)] = 0
 
-                    data = Data(x = torch_data.x, 
-                            edge_index = torch_data.edge_index,
-                            y = torch_data.y,
-                            edge_attr = edge_attr,
-                            pos = torch_data.pos)
-                    
+                data = Data(x = torch_data.x, 
+                        edge_index = torch_data.edge_index,
+                        y = torch_data.y,
+                        edge_attr = edge_attr,
+                        pos = torch_data.pos)
+                
                 data_list.append(data)
             
             print(f'[Prepare torch data] progress: {(kid + 1) / len(container.keys()) * 100.:.2f}%', end='\r')
@@ -164,7 +156,11 @@ def main():
     
     # loader = DataLoader(dataset, batch_size=1, shuffle=False)
     
-    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
+    n_features = dataset.num_node_features
+    if encoder_enabled:
+        n_features = dataset[0].num_node_features * ((2 * encoder_size) + 1)
+        
+    model = GNNL(hidden_channels=256, n_features=n_features)
     print(model)
     
     model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
@@ -179,6 +175,10 @@ def main():
         batch = torch.zeros(len(data.x), dtype=torch.int64)
         x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
+    
+        if encoder_enabled:
+            x_data = signal_encoder(x_data, L=encoder_size)
+            x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
         
         prediction = model(x_data, x_edge_data, data.edge_index, batch=batch)
         # prediction = y_scaler.inverse_transform(prediction.detach().numpy())
