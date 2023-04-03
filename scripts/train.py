@@ -233,10 +233,10 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            y_data = torch.tensor(data.y.reshape(-1, 3), dtype=torch.float)
+            y_data = data.y
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)  # Perform a single forward pass.
-            loss = criterion(out, y_data)  # Compute the loss.
+            loss = criterion(out.flatten(), y_data)  # Compute the loss.
             error += loss.item()
             loss.backward()  # Derive gradients.
             r2_error += r2(out.flatten(), y_data.flatten())
@@ -257,10 +257,11 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            y_data = torch.tensor(data.y.reshape(-1, 3), dtype=torch.float)
+            # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
+            y_data = data.y
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)
-            loss = criterion(out, y_data)
+            loss = criterion(out.flatten(), y_data)
             error += loss.item()  
             r2_error += r2(out.flatten(), y_data.flatten())
         return error / len(loader), r2_error / len(loader)  # Derive ratio of correct predictions.
