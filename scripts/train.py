@@ -75,7 +75,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
     print(f'Generation of {len(sensors)} views for `{scene_file}`')
     for view_i, sensor in enumerate(sensors):
         
-        print(f'Generating data for view n°{view_i+1}')
+        # print(f'Generating data for view n°{view_i+1}')
         image = mi.render(scene, spp=ref_spp, integrator=ref_integrator, sensor=sensor)
         
         # save image as exr and reload it using cv2
@@ -84,7 +84,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         exr_image = np.asarray(cv2.imread(image_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
         ref_images.append(exr_image)
         
-        print(f' -- reference of view n°{view_i+1} generated...')
+        # print(f' -- reference of view n°{view_i+1} generated...')
         params = mi.traverse(scene)
         gnn_log_filename = f'{output_folder}/gnn_file_{view_i}.path'
         params['logfile'] = gnn_log_filename
@@ -92,7 +92,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
         if not os.path.exists(gnn_log_filename):
             mi.render(scene, spp=data_spp, integrator=gnn_integrator, sensor=sensor)
-        print(f' -- GNN data of view n°{view_i+1} generated...')
+        print(f' -- GNN data generation: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
         
         output_gnn_files.append(gnn_log_filename)
         
@@ -142,14 +142,15 @@ def main():
         
         containers = []
         for gnn_i, gnn_file in enumerate(gnn_files):
+            print(f'Load of GNN data files: {(gnn_i + 1) / len(gnn_files) * 100:.2f}%', end="\r")
             ref_image = ref_images[gnn_i]
-            container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
+            container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
             containers.append(container)
             
         # build connections individually
         build_containers = []
         for c_i, container in enumerate(containers):
-            print(f'File n°{c_i + 1} of {len(containers)}', end="\r")
+            print(f'Build GNN data: {(c_i + 1) / len(containers) * 100:.2f}', end="\r")
             container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)

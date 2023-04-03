@@ -12,7 +12,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies", "version", "readme"]
+dynamic = ["dependencies"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -20,8 +20,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
-version = {attr = "mignn.VERSION"}
-readme = {file = ["README.md"], content-type = "text/markdown"}
+# version = {attr = "mignn.VERSION"}
+# readme = {file = ["README.md"], content-type = "text/markdown"}
 
 [project.urls]
 "Homepage" = "https://github.com/jbuisine/mignn"
