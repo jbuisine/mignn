@@ -160,7 +160,7 @@ def main():
     # normalize data
     x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
     edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{model_folder}/y_scaler.bin')
+    # y_scaler = skload(f'{model_folder}/y_scaler.bin')
     
     # loader = DataLoader(dataset, batch_size=1, shuffle=False)
     
@@ -172,7 +172,8 @@ def main():
             
     pixels = []
         
-    for b_i in range(len(dataset)):
+    n_predictions = len(dataset)
+    for b_i in range(n_predictions):
         
         data = dataset[b_i]
         batch = torch.zeros(len(data.x), dtype=torch.int64)
@@ -180,8 +181,8 @@ def main():
         x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
         
         prediction = model(x_data, x_edge_data, data.edge_index, batch=batch)
-        prediction = y_scaler.inverse_transform(prediction.detach().numpy())
-        pixels.append(prediction)
+        # prediction = y_scaler.inverse_transform(prediction.detach().numpy())
+        pixels.append(prediction.detach().numpy())
         
         print(f'Prediction progress: {(b_i + 1) / len(dataset) * 100.:.2f}%', end='\r')
         

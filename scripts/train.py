@@ -203,11 +203,11 @@ def main():
     print(f'Save scalers into: {model_folder}/scalers.pkl')
     x_scaler = MinMaxScaler().fit(train_dataset.data.x)
     edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
-    y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape((-1, 3)))
+    # y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape((-1, 3)))
     
     skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
     skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
-    skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
+    # skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
     
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
@@ -219,7 +219,7 @@ def main():
     print(f'Number of params: {sum(p.numel() for p in model.parameters())}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = torch.nn.MSELoss()
+    criterion = torch.nn.L1Loss()
     r2 = R2Score()
 
     def train(epoch_id):
@@ -232,8 +232,8 @@ def main():
             # normalize data
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-            y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            # y_data = data.y
+            # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
+            y_data = data.y
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)  # Perform a single forward pass.
             loss = criterion(out, y_data)  # Compute the loss.
@@ -256,8 +256,8 @@ def main():
             # normalize data
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-            y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            # y_data = data.y
+            # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
+            y_data = data.y
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)
             loss = criterion(out, y_data)
