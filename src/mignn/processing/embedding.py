@@ -1,6 +1,6 @@
 import torch
 
-def signal_embedding(x_data, L=6):
+def signal_embedding(x_data, L=20):
     """
     Gets a base embedding for one dimension with sin and cos intertwined
     """

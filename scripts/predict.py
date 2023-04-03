@@ -83,7 +83,7 @@ def main():
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--model', type=str, help="where to find model", required=False, default=10)
     parser.add_argument('--output', type=str, help="output prediction folder", required=True)
-    parser.add_argument('--embedding', type=bool, help="embedding data or not", required=False, default=False)
+    parser.add_argument('--embedding', type=int, help="embedding data or not", required=False, default=False)
     
     args = parser.parse_args()
     
@@ -138,7 +138,7 @@ def main():
                 else:
                     
                     edge_attr = torch_data.edge_attr
-                    edge_attr[np.isinf(torch_data.edge_attr)] = 0
+                    edge_attr[torch.isinf(torch_data.edge_attr)] = 0
 
                     data = Data(x = torch_data.x, 
                             edge_index = torch_data.edge_index,
@@ -164,7 +164,7 @@ def main():
     
     # loader = DataLoader(dataset, batch_size=1, shuffle=False)
     
-    model = GNNL(hidden_channels=128, n_features=dataset.num_node_features)
+    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
     print(model)
     
     model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
