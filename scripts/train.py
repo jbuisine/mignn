@@ -102,15 +102,17 @@ def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
+    parser.add_argument('--radius', type=float, help="radius from center point", required=True)
     parser.add_argument('--output', type=str, help="output model name", required=True)
     parser.add_argument('--epochs', type=int, help="expected number of epochs", required=False, default=10)
     parser.add_argument('--embedding', type=int, help="embedding data or not", required=False, default=False)
-    parser.add_argument('--sensors', type=int, help="number of viewpoints on scene", required=False, default=6)
+    parser.add_argument('--sensors', type=int, help="number of viewpoints on scene (randomly generated)", required=False, default=6)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
     
     args = parser.parse_args()
     
     scene_file        = args.scene
+    radius            = args.radius
     output_name       = args.output
     n_epochs          = args.epochs
     embedding_enabled = args.embedding
@@ -125,7 +127,6 @@ def main():
     # phis = [ (140 - (i*20)) % 180 for i in range(sensor_count)]
     # previous 22
     angles = [ (random.uniform(0, 360), random.uniform(0, 360)) for _ in range(sensor_count) ]
-
     sensors = [load_sensor(radius, phi, theta, [0, 1, 0]) for (phi, theta) in angles ]
 
     dataset_path = f'data/train/datasets/{output_name}'
