@@ -145,9 +145,44 @@ def main():
         # save dataset
         PathLightDataset(dataset_path, data_list)
 
-    # transform applied only when loaded
-    dataset = PathLightDataset(root=dataset_path)
-    print(dataset[0])
+    # if enabled embbeding
+    if encoder_enabled:
+        
+        encoded_data_list = []
+        encoded_dataset_path = f'data/train/datasets/{output_name}_encoded'
+        
+        if not os.path.exists(encoded_dataset_path):
+                    
+            # use previous data list if possible
+            dataset = PathLightDataset(root=dataset_path) if data_list is None else data_list
+        
+            n_graphs = len(dataset)
+            for d_i in range(n_graphs):
+                
+                data = dataset[d_i]
+                encoded_data = Data(x = signal_encoder(data.x, L=encoder_size), 
+                            edge_index = data.edge_index,
+                            y = data.y,
+                            edge_attr = signal_encoder(data.edge_attr, L=encoder_size),
+                            pos = data.pos)
+            
+                encoded_data_list.append(encoded_data)
+                
+                print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
+                
+            # save dataset
+            print(f'Save computed dataset (encoded) into: {encoded_dataset_path}')
+            PathLightDataset(encoded_dataset_path, encoded_data_list)
+
+        print(f'Load encoded dataset from: {encoded_dataset_path}')
+        dataset = PathLightDataset(root=encoded_dataset_path)
+        print(f'Example of encoded element from dataset: {dataset[0]}')
+        
+    else:
+        # transform applied only when loaded
+        print(f'Load dataset from: {dataset_path}')
+        dataset = PathLightDataset(root=dataset_path)
+        print(f'Example element from dataset: {dataset[0]}')
     
     # normalize data
     x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
@@ -176,10 +211,6 @@ def main():
         x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
     
-        if encoder_enabled:
-            x_data = signal_encoder(x_data, L=encoder_size)
-            x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
-        
         prediction = model(x_data, x_edge_data, data.edge_index, batch=batch)
         # prediction = y_scaler.inverse_transform(prediction.detach().numpy())
         pixels.append(prediction.detach().numpy())

@@ -151,7 +151,7 @@ def main():
         # build connections individually
         build_containers = []
         for c_i, container in enumerate(containers):
-            print(f'Build GNN data: {(c_i + 1) / len(containers) * 100:.2f}', end="\r")
+            print(f'Build GNN data: {(c_i + 1) / len(containers) * 100:.2f}%', end="\r")
             container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)
@@ -185,12 +185,46 @@ def main():
         # save dataset
         print(f'Save computed dataset into: {dataset_path}')
         PathLightDataset(dataset_path, data_list)
+    
+    # if enabled embbeding
+    if encoder_enabled:
+        
+        encoded_data_list = []
+        encoded_dataset_path = f'data/train/datasets/{output_name}_encoded'
+        
+        if not os.path.exists(encoded_dataset_path):
+                    
+            # use previous data list if possible
+            dataset = PathLightDataset(root=dataset_path) if data_list is None else data_list
+        
+            n_graphs = len(dataset)
+            for d_i in range(n_graphs):
+                
+                data = dataset[d_i]
+                encoded_data = Data(x = signal_encoder(data.x, L=encoder_size), 
+                            edge_index = data.edge_index,
+                            y = data.y,
+                            edge_attr = signal_encoder(data.edge_attr, L=encoder_size),
+                            pos = data.pos)
+            
+                encoded_data_list.append(encoded_data)
+                
+                print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
+                
+            # save dataset
+            print(f'Save computed dataset (encoded) into: {encoded_dataset_path}')
+            PathLightDataset(encoded_dataset_path, encoded_data_list)
 
-    # transform applied only when loaded
-    print(f'Load dataset from: {dataset_path}')
-    dataset = PathLightDataset(root=dataset_path)
-    print(f'Example element from dataset: {dataset[0]}')
-
+        print(f'Load encoded dataset from: {encoded_dataset_path}')
+        dataset = PathLightDataset(root=encoded_dataset_path)
+        print(f'Example of encoded element from dataset: {dataset[0]}')
+        
+    else:
+        # transform applied only when loaded
+        print(f'Load dataset from: {dataset_path}')
+        dataset = PathLightDataset(root=dataset_path)
+        print(f'Example element from dataset: {dataset[0]}')
+    
     split_index = int(len(dataset) * split_percent)
     train_dataset = dataset[:split_index]
     test_dataset = dataset[split_index:]
@@ -212,12 +246,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
     
     print('Prepare model: ')
-    
-    n_features = dataset.num_node_features
-    if encoder_enabled:
-        n_features = dataset[0].num_node_features * ((2 * encoder_size) + 1)
-    
-    model = GNNL(hidden_channels=256, n_features=n_features)
+    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
     # model.to(device)
     print(model)
     print(f'Number of params: {sum(p.numel() for p in model.parameters())}')
@@ -237,10 +266,6 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             
-            if encoder_enabled:
-                x_data = signal_encoder(x_data, L=encoder_size)
-                x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
-                
             # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
             y_data = data.y
             
@@ -266,10 +291,6 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             
-            if encoder_enabled:
-                x_data = signal_encoder(x_data, L=encoder_size)
-                x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
-                
             y_data = data.y
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)
