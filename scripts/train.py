@@ -119,11 +119,12 @@ def main():
     sensor_count      = args.sensors
     split_percent     = args.split
     
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # TODO: add this part into library
-    radius = 5
     
+    # [default previous]
+    # radius = 5
     # phis = [ (140 - (i*20)) % 180 for i in range(sensor_count)]
     # previous 22
     angles = [ (random.uniform(0, 360), random.uniform(0, 360)) for _ in range(sensor_count) ]
@@ -148,7 +149,7 @@ def main():
         # build connections individually
         build_containers = []
         for c_i, container in enumerate(containers):
-            print(f'File n°{c_i + 1} of {len(containers)}', end=" ")
+            print(f'File n°{c_i + 1} of {len(containers)}', end="\r")
             container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)
