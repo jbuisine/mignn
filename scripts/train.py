@@ -26,7 +26,7 @@ from torchmetrics import R2Score
 
 from models.gcn_model import GNNL
 
-w_size, h_size = 128, 128
+w_size, h_size = 32, 32
 
 def load_sensor(r, phi, theta, target):
     # Apply two rotations to convert from spherical coordinates to world 3D coordinates.
@@ -233,7 +233,7 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            y_data = data.y
+            y_data = torch.tensor(data.y.reshape(-1, 3), dtype=torch.float)
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)  # Perform a single forward pass.
             loss = criterion(out, y_data)  # Compute the loss.
@@ -257,7 +257,7 @@ def main():
             x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
             x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
             # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            y_data = data.y
+            y_data = torch.tensor(data.y.reshape(-1, 3), dtype=torch.float)
             
             out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)
             loss = criterion(out, y_data)
