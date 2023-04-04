@@ -5,9 +5,6 @@ def signal_encoder(x_data, L=20):
     Gets a base embedding for one dimension with sin and cos intertwined
     """
     powers = torch.pow(2., torch.arange(L))
-    
-    # avoid infinite data
-    x_data[torch.isinf(x_data)] = 0
     emb_data = []
     
     # for each data elements

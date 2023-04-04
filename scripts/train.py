@@ -26,20 +26,14 @@ from torchmetrics import R2Score
 
 from models.gcn_model import GNNL
 
-w_size, h_size = 4, 4
+w_size, h_size = 2, 2
 encoder_size = 6
 
-def load_sensor(r, phi, theta, target):
-    # Apply two rotations to convert from spherical coordinates to world 3D coordinates.
-    origin = T.rotate([0, 0, 1], phi).rotate([0, 1, 0], theta) @ mi.ScalarPoint3f([0, 0, r])
-    up = [0, 1, 0]
-    
-    # matrix = mi.Transform4f.look_at(origin=origin, target=target, up=up)
-    # print(matrix)
+def load_sensor_from(fov, origin, target, up):
     
     return mi.load_dict({
         'type': 'perspective',
-        'fov': 25,
+        'fov': fov,
         'to_world': T.look_at(
             origin=origin,
             target=target,
@@ -59,6 +53,7 @@ def load_sensor(r, phi, theta, target):
             'pixel_format': 'rgb',
         },
     })
+
 
 def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folder):
         
@@ -93,7 +88,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
         if not os.path.exists(gnn_log_filename):
             mi.render(scene, spp=data_spp, integrator=gnn_integrator, sensor=sensor)
-        print(f' -- GNN data generation: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
+        print(f'[Generation] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
         
         output_gnn_files.append(gnn_log_filename)
         
@@ -103,35 +98,45 @@ def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
-    parser.add_argument('--radius', type=float, help="radius from center point", required=True)
-    parser.add_argument('--output', type=str, help="output model name", required=True)
+    parser.add_argument('--output', type=str, help="output folder", required=True)
+    parser.add_argument('--name', type=str, help="output model name", required=True)
     parser.add_argument('--epochs', type=int, help="expected number of epochs", required=False, default=10)
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
-    parser.add_argument('--sensors', type=int, help="number of viewpoints on scene (randomly generated)", required=False, default=6)
+    parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
     
     args = parser.parse_args()
     
     scene_file        = args.scene
-    radius            = args.radius
-    output_name       = args.output
+    output_folder     = args.output
+    model_name        = args.name
     n_epochs          = args.epochs
     encoder_enabled   = args.encoder
-    sensor_count      = args.sensors
     split_percent     = args.split
+    sensors_folder    = args.sensors
     
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # TODO: add this part into library
-    
-    # [default previous]
-    # radius = 5
-    # phis = [ (140 - (i*20)) % 180 for i in range(sensor_count)]
-    # previous 22
-    angles = [ (random.uniform(0, 360), random.uniform(0, 360)) for _ in range(sensor_count) ]
-    sensors = [load_sensor(radius, phi, theta, [0, 1, 0]) for (phi, theta) in angles ]
+    # use of: https://github.com/prise-3d/vpbrt
+    # read from camera LookAt folder
+    sensors = []
+    for file in os.listdir(sensors_folder):
+        file_path = os.path.join(sensors_folder, file)
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            
+            look_at_data = f.readline().replace('\n', '').split('  ')
+            fov = float(f.readline().replace('\n', '').split(' ')[-1])
+            origin = list(map(float, look_at_data[1].split(' ')))
+            target = list(map(float, look_at_data[2].split(' ')))
+            up = list(map(float, look_at_data[3].split(' ')))
+            
+            # print(f'LookAt: [origin: {origin}, target: {target}, up: {up}], Fov: {fov}')
+            sensor = load_sensor_from(fov, origin, target, up)
+            sensors.append(sensor)
 
-    dataset_path = f'data/train/datasets/{output_name}'
+    os.makedirs(output_folder, exist_ok=True)
+    dataset_path = f'{output_folder}/train/datasets/{model_name}'
     
     if not os.path.exists(dataset_path):
         gnn_files, ref_images = prepare_data(scene_file, 
@@ -139,11 +144,11 @@ def main():
                                     data_spp = 10, 
                                     ref_spp = 10000, 
                                     sensors = sensors, 
-                                    output_folder = f'data/train/generated/{output_name}')
+                                    output_folder = f'{output_folder}/train/generated/{model_name}')
         
         containers = []
         for gnn_i, gnn_file in enumerate(gnn_files):
-            print(f'Load of GNN data files: {(gnn_i + 1) / len(gnn_files) * 100:.2f}%', end="\r")
+            print(f'[Loading files] GNN data files: {(gnn_i + 1) / len(gnn_files) * 100:.2f}%', end="\r")
             ref_image = ref_images[gnn_i]
             container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
             containers.append(container)
@@ -151,7 +156,7 @@ def main():
         # build connections individually
         build_containers = []
         for c_i, container in enumerate(containers):
-            print(f'Build GNN data: {(c_i + 1) / len(containers) * 100:.2f}%', end="\r")
+            print(f'[Connections build] GNN data: {(c_i + 1) / len(containers) * 100:.2f}%', end="\r")
             container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)
@@ -171,7 +176,7 @@ def main():
                 # fix infinite values
                 edge_attr = torch_data.edge_attr
                 edge_attr[torch.isinf(torch_data.edge_attr)] = 0
-
+                
                 data = Data(x = torch_data.x, 
                         edge_index = torch_data.edge_index,
                         y = torch_data.y,
@@ -183,57 +188,23 @@ def main():
             print(f'[Prepare torch data] progress: {(kid + 1) / len(merged_graph_container.keys()) * 100.:.2f}%', end='\r')
         
         # save dataset
-        print(f'Save computed dataset into: {dataset_path}')
+        print(f'[Intermediate save] save computed dataset into: {dataset_path}')
         PathLightDataset(dataset_path, data_list)
     
-    # if enabled embbeding
-    if encoder_enabled:
-        
-        encoded_data_list = []
-        encoded_dataset_path = f'data/train/datasets/{output_name}_encoded'
-        
-        if not os.path.exists(encoded_dataset_path):
-                    
-            # use previous data list if possible
-            dataset = PathLightDataset(root=dataset_path) if data_list is None else data_list
-        
-            n_graphs = len(dataset)
-            for d_i in range(n_graphs):
-                
-                data = dataset[d_i]
-                encoded_data = Data(x = signal_encoder(data.x, L=encoder_size), 
-                            edge_index = data.edge_index,
-                            y = data.y,
-                            edge_attr = signal_encoder(data.edge_attr, L=encoder_size),
-                            pos = data.pos)
-            
-                encoded_data_list.append(encoded_data)
-                
-                print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
-                
-            # save dataset
-            print(f'Save computed dataset (encoded) into: {encoded_dataset_path}')
-            PathLightDataset(encoded_dataset_path, encoded_data_list)
-
-        print(f'Load encoded dataset from: {encoded_dataset_path}')
-        dataset = PathLightDataset(root=encoded_dataset_path)
-        print(f'Example of encoded element from dataset: {dataset[0]}')
-        
-    else:
-        # transform applied only when loaded
-        print(f'Load dataset from: {dataset_path}')
-        dataset = PathLightDataset(root=dataset_path)
-        print(f'Example element from dataset: {dataset[0]}')
+    dataset = PathLightDataset(root=dataset_path)
+    print(dataset.data.x.size())
+    print(dataset.data.edge_attr.size())
     
     split_index = int(len(dataset) * split_percent)
     train_dataset = dataset[:split_index]
     test_dataset = dataset[split_index:]
     
-    model_folder = f'data/models/{output_name}'
+    model_folder = f'{output_folder}/models/{model_name}'
+    stats_folder = f'{output_folder}/stats/{model_name}'
     os.makedirs(model_folder, exist_ok=True)
+    os.makedirs(stats_folder, exist_ok=True)
     
     # normalize data
-    print(f'Save scalers into: {model_folder}/scalers.pkl')
     x_scaler = MinMaxScaler().fit(train_dataset.data.x)
     edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
     # y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape((-1, 3)))
@@ -241,6 +212,50 @@ def main():
     skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
     skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
     # skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
+    
+    if encoder_enabled:
+        print('[Encoded required] scaled data will be encoded')
+    
+    scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
+        
+    if not os.path.exists(scaled_dataset_path):
+        
+        scaled_data_list = []
+        
+        n_graphs = len(dataset)
+        for d_i in range(n_graphs):
+            
+            data = dataset[d_i]
+            
+            # perform scale and then encoding
+            x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
+            x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
+            
+            if encoder_enabled:
+                x_data = signal_encoder(x_data, L=encoder_size)
+                x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
+                
+            scaled_data = Data(x = x_data, 
+                    edge_index = data.edge_index,
+                    y = data.y,
+                    edge_attr = x_edge_data,
+                    pos = data.pos)
+            
+            scaled_data_list.append(scaled_data)
+            
+            print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
+            
+        # save dataset
+        print(f'Save scaled dataset into: {scaled_dataset_path}')
+        PathLightDataset(scaled_dataset_path, scaled_data_list)
+
+    print(f'Load scaled dataset from: {scaled_dataset_path}')
+    dataset = PathLightDataset(root=scaled_dataset_path)
+    print(f'Example of scaled element from dataset: {dataset[0]}')
+    
+    split_index = int(len(dataset) * split_percent)
+    train_dataset = dataset[:split_index]
+    test_dataset = dataset[split_index:]
     
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
@@ -253,7 +268,7 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.MSELoss()
-    r2 = R2Score()
+    r2_score = R2Score()
 
     def train(epoch_id):
         model.train()
@@ -262,18 +277,11 @@ def main():
         r2_error = 0
         for b_i, data in enumerate(train_loader):  # Iterate in batches over the training dataset.
             
-            # normalize data
-            x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
-            x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-            
-            # y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-            y_data = data.y
-            
-            out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)  # Perform a single forward pass.
-            loss = criterion(out.flatten(), y_data)  # Compute the loss.
+            out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)  # Perform a single forward pass.
+            loss = criterion(out.flatten(), data.y)  # Compute the loss.
             error += loss.item()
             loss.backward()  # Derive gradients.
-            r2_error += r2(out.flatten(), y_data.flatten())
+            r2_error += r2_score(out.flatten(), data.y.flatten())
             optimizer.step()  # Update parameters based on gradients.
             optimizer.zero_grad()  # Clear gradients.
             
@@ -287,28 +295,32 @@ def main():
         r2_error = 0
         for data in loader:  # Iterate in batches over the training/test dataset.
             
-            # normalize data
-            x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
-            x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-            
-            y_data = data.y
-            
-            out = model(x_data, x_edge_data, data.edge_index, batch=data.batch)
-            loss = criterion(out.flatten(), y_data)
+            out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
+            loss = criterion(out.flatten(), data.y)
             error += loss.item()  
-            r2_error += r2(out.flatten(), y_data.flatten())
+            r2_error += r2_score(out.flatten(), data.y.flatten())
         return error / len(loader), r2_error / len(loader)  # Derive ratio of correct predictions.
 
+    stat_file = open(f'{stats_folder}/{model_name}.csv', 'w', encoding='utf-8')
+    stat_file.write('train_loss;train_r2;test_loss;test_r2\n')
 
     for epoch in range(1, n_epochs + 1):
         train(epoch)
         train_loss, train_r2 = test(train_loader)
         test_loss, test_r2 = test(test_loader)
-        print(f'[Epoch: {epoch:03d}]: Train (Loss: {train_loss:.5f}, R²: {train_r2:.5f}), '\
+        
+        # save model stat data
+        stat_file.write(f'{train_loss};{train_r2};{test_loss};{test_r2}\n')
+        
+        print(f'[Epoch n°{epoch:03d}]: Train (Loss: {train_loss:.5f}, R²: {train_r2:.5f}), '\
             f'Test (Loss: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
+    
+    stat_file.close()
             
     torch.save(model.state_dict(), f'{model_folder}/model.pt')
     torch.save(optimizer.state_dict(), f'{model_folder}/optimizer.pt')
+    
+    print(f'Model has been saved into: `{model_folder}`')
             
 if __name__ == "__main__":
     main()

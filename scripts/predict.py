@@ -21,20 +21,18 @@ from joblib import load as skload
 
 from models.gcn_model import GNNL
 
-w_size, h_size = 128, 128
+w_size, h_size = 32, 32
 encoder_size = 6
 
-def load_sensor(r, phi, theta, target):
-    # Apply two rotations to convert from spherical coordinates to world 3D coordinates.
-    origin = T.rotate([0, 0, 1], phi).rotate([0, 1, 0], theta) @ mi.ScalarPoint3f([0, 0, r])
-
+def load_sensor_from(fov, origin, target, up):
+    
     return mi.load_dict({
         'type': 'perspective',
-        'fov': 25,
+        'fov': fov,
         'to_world': T.look_at(
             origin=origin,
             target=target,
-            up=[0, 1, 0]
+            up=up
         ),
         'sampler': {
             'type': 'independent',
@@ -82,27 +80,33 @@ def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
-    parser.add_argument('--model', type=str, help="where to find model", required=False, default=10)
-    parser.add_argument('--output', type=str, help="output prediction folder", required=True)
+    parser.add_argument('--name', type=str, help="model name", required=True)
+    parser.add_argument('--folder', type=str, help="main data folder (where to find model)", required=True)
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
+    parser.add_argument('--sensor', type=str, help="specific sensor file", required=True)
     
     args = parser.parse_args()
     
     scene_file        = args.scene
-    model_folder      = args.model
-    output_name       = args.output
+    main_folder       = args.folder
+    model_name        = args.name
     encoder_enabled   = args.encoder
+    sensor_file       = args.sensor
 
-    sensor_count = 6
-    radius = 5
-    phis = [ 140 - (i*20) for i in range(sensor_count)]
-    theta = 22
-
-    sensors = [load_sensor(radius, phi, theta, [0, 1, 0]) for phi in phis]
-    current_sensor = sensors[2]
+    # use of: https://github.com/prise-3d/vpbrt
+    # read from camera LookAt folder
+    with open(sensor_file, 'r', encoding='utf-8') as f:
+        
+        look_at_data = f.readline().replace('\n', '').split('  ')
+        fov = float(f.readline().replace('\n', '').split(' ')[-1])
+        origin = list(map(float, look_at_data[1].split(' ')))
+        target = list(map(float, look_at_data[2].split(' ')))
+        up = list(map(float, look_at_data[3].split(' ')))
+        
+        print(f'LookAt: [origin: {origin}, target: {target}, up: {up}], Fov: {fov}')
+        sensor = load_sensor_from(fov, origin, target, up)
     
-    
-    dataset_path = f'data/predictions/datasets/{output_name}'
+    dataset_path = f'{main_folder}/predictions/datasets/{model_name}'
     
     if not os.path.exists(dataset_path):
     
@@ -110,8 +114,8 @@ def main():
                                     max_depth = 5, 
                                     data_spp = 10, 
                                     ref_spp = 1000, 
-                                    sensor = current_sensor, 
-                                    output_folder = f'data/predictions/generated/{output_name}')
+                                    sensor = sensor, 
+                                    output_folder = f'{main_folder}/predictions/generated/{model_name}')
         
         
         container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
@@ -145,57 +149,58 @@ def main():
         # save dataset
         PathLightDataset(dataset_path, data_list)
 
-    # if enabled embbeding
-    if encoder_enabled:
-        
-        encoded_data_list = []
-        encoded_dataset_path = f'data/train/datasets/{output_name}_encoded'
-        
-        if not os.path.exists(encoded_dataset_path):
-                    
-            # use previous data list if possible
-            dataset = PathLightDataset(root=dataset_path) if data_list is None else data_list
-        
-            n_graphs = len(dataset)
-            for d_i in range(n_graphs):
-                
-                data = dataset[d_i]
-                encoded_data = Data(x = signal_encoder(data.x, L=encoder_size), 
-                            edge_index = data.edge_index,
-                            y = data.y,
-                            edge_attr = signal_encoder(data.edge_attr, L=encoder_size),
-                            pos = data.pos)
-            
-                encoded_data_list.append(encoded_data)
-                
-                print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
-                
-            # save dataset
-            print(f'Save computed dataset (encoded) into: {encoded_dataset_path}')
-            PathLightDataset(encoded_dataset_path, encoded_data_list)
-
-        print(f'Load encoded dataset from: {encoded_dataset_path}')
-        dataset = PathLightDataset(root=encoded_dataset_path)
-        print(f'Example of encoded element from dataset: {dataset[0]}')
-        
-    else:
-        # transform applied only when loaded
-        print(f'Load dataset from: {dataset_path}')
-        dataset = PathLightDataset(root=dataset_path)
-        print(f'Example element from dataset: {dataset[0]}')
+    dataset = PathLightDataset(root=dataset_path)
+    print(dataset.data.x.size())
     
     # normalize data
+    model_folder = f'{main_folder}/models/{model_name}'
+    
     x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
     edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
     # y_scaler = skload(f'{model_folder}/y_scaler.bin')
     
-    # loader = DataLoader(dataset, batch_size=1, shuffle=False)
+ 
+    scaled_dataset_path = f'{main_folder}/predictions/datasets/{model_name}_scaled'
     
-    n_features = dataset.num_node_features
     if encoder_enabled:
-        n_features = dataset[0].num_node_features * ((2 * encoder_size) + 1)
+        print('[Encoded required] scaled data will be encoded')
         
-    model = GNNL(hidden_channels=256, n_features=n_features)
+    if not os.path.exists(scaled_dataset_path):
+        
+        scaled_data_list = []
+        
+        n_graphs = len(dataset)
+        for d_i in range(n_graphs):
+            
+            data = dataset[d_i]
+            
+            # perform scale and then encoding
+            x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
+            x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
+            
+            if encoder_enabled:
+                x_data = signal_encoder(x_data, L=encoder_size)
+                x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
+                
+            scaled_data = Data(x = x_data, 
+                    edge_index = data.edge_index,
+                    y = data.y,
+                    edge_attr = x_edge_data,
+                    pos = data.pos)
+            
+            scaled_data_list.append(scaled_data)
+            
+            print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
+            
+        # save dataset
+        print(f'Save scaled dataset into: {scaled_dataset_path}')
+        PathLightDataset(scaled_dataset_path, scaled_data_list)
+
+    print(f'Load scaled dataset from: {scaled_dataset_path}')
+    dataset = PathLightDataset(root=scaled_dataset_path)
+    print(f'Example of scaled element from dataset: {dataset[0]}')
+ 
+    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
     print(model)
     
     model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
@@ -207,11 +212,7 @@ def main():
     for b_i in range(n_predictions):
         
         data = dataset[b_i]
-        batch = torch.zeros(len(data.x), dtype=torch.int64)
-        x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
-        x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-    
-        prediction = model(x_data, x_edge_data, data.edge_index, batch=batch)
+        prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
         # prediction = y_scaler.inverse_transform(prediction.detach().numpy())
         pixels.append(prediction.detach().numpy())
         
@@ -219,8 +220,8 @@ def main():
         
     image = np.array(pixels).reshape((h_size, w_size, 3))
     
-    os.makedirs('data/predictions', exist_ok=True)
-    image_path = f'data/predictions/{output_name}.exr'
+    os.makedirs(f'{main_folder}/predictions', exist_ok=True)
+    image_path = f'{main_folder}/predictions/{model_name}.exr'
     mi.util.write_bitmap(image_path, image)
     print(f'Predicted image has been saved into: {image_path}')
     
