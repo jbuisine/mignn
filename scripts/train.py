@@ -38,6 +38,8 @@ encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
     
+    global w_size, h_size
+    
     return mi.load_dict({
         'type': 'perspective',
         'fov': fov,
@@ -94,7 +96,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
         if not os.path.exists(gnn_log_filename):
             mi.render(scene, spp=data_spp, integrator=gnn_integrator, sensor=sensor)
-        print(f'[Generation] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
+        print(f'[Generation from images: ({w_size},{h_size})] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
         
         output_gnn_files.append(gnn_log_filename)
         
@@ -124,6 +126,8 @@ def load_gnn_file(params):
     
 def main():
     
+    global w_size, h_size
+    
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--output', type=str, help="output folder", required=True)
@@ -132,6 +136,7 @@ def main():
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
+    parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
     
     args = parser.parse_args()
     
@@ -142,6 +147,7 @@ def main():
     encoder_enabled   = args.encoder
     split_percent     = args.split
     sensors_folder    = args.sensors
+    w_size, h_size    = list(map(int, args.img_size.split(',')))
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -194,6 +200,9 @@ def main():
                      
         merged_graph_container = LightGraphManager.fusion(build_containers)
         print('[merged]', merged_graph_container)
+        
+        print(f'[cleaning] clear intermediated saved containers into {output_temp}')
+        os.system(f'rm -r {output_temp}')
         
         # prepare Dataset    
         data_list = []
@@ -248,7 +257,7 @@ def main():
     
     scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
         
-    if not os.path.exists(scaled_dataset_path):
+    if not os.path.exists(f'{scaled_dataset_path}.train'):
         
         scaled_data_list = []
         
@@ -276,22 +285,20 @@ def main():
             print(f'[Prepare scaled torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
             
         # save dataset
-        print(f'Save scaled dataset into: {scaled_dataset_path}')
-        PathLightDataset(scaled_dataset_path, scaled_data_list)
+        print(f'Save scaled train and test dataset into: {scaled_dataset_path}')
+        PathLightDataset(f'{scaled_dataset_path}.train', scaled_data_list[:split_index])
+        PathLightDataset(f'{scaled_dataset_path}.test', scaled_data_list[split_index:])
 
-    print(f'Load scaled dataset from: {scaled_dataset_path}')
-    dataset = PathLightDataset(root=scaled_dataset_path)
-    print(f'Example of scaled element from dataset: {dataset[0]}')
-    
-    split_index = int(len(dataset) * split_percent)
-    train_dataset = dataset[:split_index]
-    test_dataset = dataset[split_index:]
+    print(f'Load scaled dataset from: `{scaled_dataset_path}.train` and `{scaled_dataset_path}.test`')
+    train_dataset = PathLightDataset(root=f'{scaled_dataset_path}.train')
+    test_dataset = PathLightDataset(root=f'{scaled_dataset_path}.test')
+    print(f'Example of scaled element from train dataset: {train_dataset[0]}')
     
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
     
     print('Prepare model: ')
-    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features).to(device)
+    model = GNNL(hidden_channels=256, n_features=train_dataset.num_node_features).to(device)
     # model.to(device)
     print(model)
     print(f'Number of params: {sum(p.numel() for p in model.parameters())}')
@@ -313,7 +320,7 @@ def main():
             loss = criterion(out.flatten(), data.y)  # Compute the loss.
             error += loss.item()
             loss.backward()  # Derive gradients.
-            r2_error += r2_score(out.flatten(), data.y.flatten())
+            r2_error += r2_score(out.flatten(), data.y.flatten()).item()
             optimizer.step()  # Update parameters based on gradients.
             optimizer.zero_grad()  # Clear gradients.
             
@@ -332,7 +339,7 @@ def main():
             out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
             loss = criterion(out.flatten(), data.y)
             error += loss.item()  
-            r2_error += r2_score(out.flatten(), data.y.flatten())
+            r2_error += r2_score(out.flatten(), data.y.flatten()).item()
         return error / len(loader), r2_error / len(loader)  # Derive ratio of correct predictions.
 
     stat_file = open(f'{stats_folder}/{model_name}.csv', 'w', encoding='utf-8')
