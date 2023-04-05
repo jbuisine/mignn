@@ -24,9 +24,18 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from joblib import dump as skdump
 from torchmetrics import R2Score
 
+import tqdm
+import multiprocessing as mp
+from multiprocessing.pool import ThreadPool
+
 from models.gcn_model import GNNL
 
-w_size, h_size = 16, 16
+# ignore Drjit warning
+import warnings
+warnings.filterwarnings('ignore')
+
+
+w_size, h_size = 4, 4
 encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
@@ -94,6 +103,14 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
     return output_gnn_files, ref_images
 
+def load_gnn_file(params):
+
+        gnn_file, scene, ref_image = params
+        container = SimpleLightGraphContainer.fromfile(gnn_file, scene, ref_image, verbose=False)
+        container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
+        build_container = LightGraphManager.vstack(container)
+        return build_container
+
 def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
@@ -146,16 +163,14 @@ def main():
                                     sensors = sensors, 
                                     output_folder = f'{output_folder}/train/generated/{model_name}')
         
+        
+        # multiprocess build of connections
+        pool_obj = ThreadPool()
+        params = list(zip(gnn_files, [ mi.load_file(scene_file) for _ in range(len(gnn_files))], ref_images))
+        
         build_containers = []
-        for gnn_i, gnn_file in enumerate(gnn_files):
-            print(f'[Loading files] GNN data files: {(gnn_i + 1) / len(gnn_files) * 100:.2f}%', end="\r")
-            ref_image = ref_images[gnn_i]
-            container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
-            
-            container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
-            build_container = LightGraphManager.vstack(container)
-            build_containers.append(build_container)
-            del container
+        for result in tqdm.tqdm(pool_obj.imap_unordered(load_gnn_file, params), total=len(params)):
+            build_containers.append(result)
             
         merged_graph_container = LightGraphManager.fusion(build_containers)
         print('[merged]', merged_graph_container)

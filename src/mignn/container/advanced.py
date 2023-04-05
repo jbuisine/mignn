@@ -24,7 +24,7 @@ class AdvancedLightGraphContainer(LightGraphContainer):
         """
         
         mi.set_variant(self._mi_variant)
-        scene = mi.load_file(self._scene_file)
+        scene = self._scene
         sensor = scene.sensors()[0]
         sampler = sensor.sampler()
         bsdf_ctx = mi.BSDFContext()

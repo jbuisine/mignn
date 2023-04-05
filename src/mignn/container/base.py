@@ -65,7 +65,6 @@ class GraphContainer(ABC):
     def build_connections(self, n_graphs: int, n_nodes_per_graphs: int, n_neighbors: int, \
         verbose: bool=False) -> None: 
         
-        # TODO: do parallelism process here (with duplicate scene per core?)
         for idx, (key, _) in enumerate(self._graphs.items()):
             
             self._build_pos_connections(key, n_graphs, n_nodes_per_graphs, n_neighbors)
@@ -122,21 +121,17 @@ class GraphContainer(ABC):
 
 class LightGraphContainer(GraphContainer, ABC):
     
-    def __init__(self, scene_file: str, reference: np.ndarray=None, \
+    def __init__(self, scene: mi.Scene, reference: np.ndarray=None, \
         variant: str='scalar_rgb'):
         
         super().__init__()
-        self._scene_file = scene_file
+        self._scene = scene
         self._reference = reference
         self._mi_variant = variant   
         
-        # load mistuba scene once
-        mi.set_variant(self._mi_variant)
-        self._scene = mi.load_file(self._scene_file)
-        
     @property
-    def scene_file(self) -> str:
-        return self._scene_file
+    def scene(self) -> str:
+        return self._scene
     
     @property
     def reference(self) -> np.ndarray:
@@ -150,17 +145,17 @@ class LightGraphContainer(GraphContainer, ABC):
     def from_params(cls, container):
         
         # init same container with same expected keys but empty
-        container_instance = cls(container.scene_file, container.reference, container.variant)
+        container_instance = cls(container.scene, container.reference, container.variant)
         empty_dict_keys = dict(zip(container.keys(), [ [] for _ in container.keys() ]))
         container_instance._init_graphs(empty_dict_keys)
         
         return container_instance
        
     @classmethod
-    def fromfile(cls, filename: str, scene_file: str, reference: np.ndarray=None, \
+    def fromfile(cls, filename: str, scene: mi.Scene, reference: np.ndarray=None, \
         variant: str='scalar_rgb', verbose: bool=True):
 
-        graph_container = cls(scene_file, reference, variant)
+        graph_container = cls(scene, reference, variant)
         graph_container._load_fromfile(filename, verbose)
         
         return graph_container

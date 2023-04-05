@@ -1,8 +1,6 @@
 import os
 import argparse
 import numpy as np
-os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
-import cv2
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -122,7 +120,8 @@ def main():
                                     output_folder = f'{main_folder}/predictions/generated/{model_name}')
         
         
-        container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
+        scene = mi.load_file(scene_file)
+        container = SimpleLightGraphContainer.fromfile(gnn_file, scene, ref_image, verbose=True)
             
         # build connections individually
         container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
