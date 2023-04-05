@@ -92,7 +92,7 @@ def main():
     model_name        = args.name
     encoder_enabled   = args.encoder
     sensor_file       = args.sensor
-
+    
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
     with open(sensor_file, 'r', encoding='utf-8') as f:
@@ -150,8 +150,7 @@ def main():
         PathLightDataset(dataset_path, data_list)
 
     dataset = PathLightDataset(root=dataset_path)
-    print(dataset.data.x.size())
-    
+   
     # normalize data
     model_folder = f'{main_folder}/models/{model_name}'
     

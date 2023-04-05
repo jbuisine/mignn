@@ -26,10 +26,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
         - n_neighbors: number of neighbors graph to take in account 
         """
         
-        # use of mitsuba in order to build new connections
-        mi.set_variant(self._mi_variant)
-        scene = mi.load_file(self._scene_file)
-        
+        # use of mitsuba in order to build new connections    
         pos = tuple(pos)
         if pos in self._graphs:
             
@@ -64,7 +61,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
                         ray = mi.Ray3f(origin, normalized_d)
 
                         # try intersect using this ray
-                        si = scene.ray_intersect(ray)
+                        si = self._scene.ray_intersect(ray)
                         
                         # if connections exists, then the node is also attached to the graph
                         # new bi-directionnal connections are created between `node` and 

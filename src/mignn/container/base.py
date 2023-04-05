@@ -7,6 +7,7 @@ from typing import List
 from itertools import chain
 
 import numpy as np
+import mitsuba as mi
 
 class GraphContainer(ABC):
     """Abstract Graph class container (manage multiple graphs)"""
@@ -64,12 +65,13 @@ class GraphContainer(ABC):
     def build_connections(self, n_graphs: int, n_nodes_per_graphs: int, n_neighbors: int, \
         verbose: bool=False) -> None: 
         
+        # TODO: do parallelism process here (with duplicate scene per core?)
         for idx, (key, _) in enumerate(self._graphs.items()):
             
             self._build_pos_connections(key, n_graphs, n_nodes_per_graphs, n_neighbors)
             
             if verbose:
-                print(f'Connections build {(idx + 1) / len(self.keys()) * 100.:.2f}%', \
+                print(f'[Connections build] -- progress: {(idx + 1) / len(self.keys()) * 100.:.2f}%', \
                     end='\r' if idx + 1 < len(self.keys()) else '\n')
             
     
@@ -108,7 +110,7 @@ class GraphContainer(ABC):
                 self.add_graph(pos, graph)
 
                 if verbose and (idx % step == 0 or idx >= n_lines - 1):
-                    print(f'Load of `{filename}` in progress: {(idx + 1) / n_lines * 100.:.2f}%', \
+                    print(f'[Load of `{filename}`] -- progress: {(idx + 1) / n_lines * 100.:.2f}%', \
                           end='\r' if idx + 1 < n_lines else '\n')
     
     def __str__(self) -> str:
@@ -127,6 +129,10 @@ class LightGraphContainer(GraphContainer, ABC):
         self._scene_file = scene_file
         self._reference = reference
         self._mi_variant = variant   
+        
+        # load mistuba scene once
+        mi.set_variant(self._mi_variant)
+        self._scene = mi.load_file(self._scene_file)
         
     @property
     def scene_file(self) -> str:

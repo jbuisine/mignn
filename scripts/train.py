@@ -26,7 +26,7 @@ from torchmetrics import R2Score
 
 from models.gcn_model import GNNL
 
-w_size, h_size = 2, 2
+w_size, h_size = 16, 16
 encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
@@ -146,20 +146,16 @@ def main():
                                     sensors = sensors, 
                                     output_folder = f'{output_folder}/train/generated/{model_name}')
         
-        containers = []
+        build_containers = []
         for gnn_i, gnn_file in enumerate(gnn_files):
             print(f'[Loading files] GNN data files: {(gnn_i + 1) / len(gnn_files) * 100:.2f}%', end="\r")
             ref_image = ref_images[gnn_i]
-            container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
-            containers.append(container)
+            container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
             
-        # build connections individually
-        build_containers = []
-        for c_i, container in enumerate(containers):
-            print(f'[Connections build] GNN data: {(c_i + 1) / len(containers) * 100:.2f}%', end="\r")
-            container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
+            container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
             build_container = LightGraphManager.vstack(container)
             build_containers.append(build_container)
+            del container
             
         merged_graph_container = LightGraphManager.fusion(build_containers)
         print('[merged]', merged_graph_container)
@@ -192,8 +188,7 @@ def main():
         PathLightDataset(dataset_path, data_list)
     
     dataset = PathLightDataset(root=dataset_path)
-    print(dataset.data.x.size())
-    print(dataset.data.edge_attr.size())
+    print(f'Dataset with {len(dataset)} graphs (percent split: {split_percent})')
     
     split_index = int(len(dataset) * split_percent)
     train_dataset = dataset[:split_index]
