@@ -143,7 +143,7 @@ def main():
     split_percent     = args.split
     sensors_folder    = args.sensors
     
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
@@ -273,7 +273,7 @@ def main():
             
             scaled_data_list.append(scaled_data)
             
-            print(f'[Prepare encoded torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
+            print(f'[Prepare scaled torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
             
         # save dataset
         print(f'Save scaled dataset into: {scaled_dataset_path}')
@@ -291,14 +291,14 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
     
     print('Prepare model: ')
-    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
+    model = GNNL(hidden_channels=256, n_features=dataset.num_node_features).to(device)
     # model.to(device)
     print(model)
     print(f'Number of params: {sum(p.numel() for p in model.parameters())}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.MSELoss()
-    r2_score = R2Score()
+    r2_score = R2Score().to(device)
 
     def train(epoch_id):
         model.train()
@@ -306,6 +306,8 @@ def main():
         error = 0
         r2_error = 0
         for b_i, data in enumerate(train_loader):  # Iterate in batches over the training dataset.
+            
+            data = data.to(device)
             
             out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)  # Perform a single forward pass.
             loss = criterion(out.flatten(), data.y)  # Compute the loss.
@@ -324,6 +326,8 @@ def main():
         error = 0
         r2_error = 0
         for data in loader:  # Iterate in batches over the training/test dataset.
+            
+            data = data.to(device)
             
             out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
             loss = criterion(out.flatten(), data.y)
