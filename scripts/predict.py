@@ -19,10 +19,15 @@ from joblib import load as skload
 
 from models.gcn_model import GNNL
 
+# ignore Drjit warning
+import warnings
+warnings.filterwarnings('ignore')
+
 w_size, h_size = 32, 32
-encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
+    
+    global w_size, h_size
     
     return mi.load_dict({
         'type': 'perspective',
@@ -76,13 +81,17 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensor, output_folder
 
 def main():
     
+    global w_size, h_size
+    
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--folder', type=str, help="main data folder (where to find model)", required=True)
     parser.add_argument('--name', type=str, help="model name", required=True)
     parser.add_argument('--outfile', type=str, help="output image name", required=True)
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
+    parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensor', type=str, help="specific sensor file", required=True)
+    parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
     
     args = parser.parse_args()
     
@@ -92,6 +101,8 @@ def main():
     outfile_name      = args.outfile
     encoder_enabled   = args.encoder
     sensor_file       = args.sensor
+    w_size, h_size    = list(map(int, args.img_size.split(',')))
+    encoder_size      = args.encoder_size
     
     output_name = outfile_name.split('.')[0]
     
@@ -119,9 +130,7 @@ def main():
                                     sensor = sensor, 
                                     output_folder = f'{main_folder}/predictions/generated/{model_name}')
         
-        
-        scene = mi.load_file(scene_file)
-        container = SimpleLightGraphContainer.fromfile(gnn_file, scene, ref_image, verbose=True)
+        container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=True)
             
         # build connections individually
         container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)

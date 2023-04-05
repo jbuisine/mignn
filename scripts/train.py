@@ -34,7 +34,6 @@ from models.gcn_model import GNNL
 
 
 w_size, h_size = 16, 16
-encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
     
@@ -96,7 +95,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
         if not os.path.exists(gnn_log_filename):
             mi.render(scene, spp=data_spp, integrator=gnn_integrator, sensor=sensor)
-        print(f'[Generation from images: ({w_size},{h_size})] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
+        print(f'[Generation from images: ({w_size}, {h_size})] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
         
         output_gnn_files.append(gnn_log_filename)
         
@@ -134,6 +133,7 @@ def main():
     parser.add_argument('--name', type=str, help="output model name", required=True)
     parser.add_argument('--epochs', type=int, help="expected number of epochs", required=False, default=10)
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
+    parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
     parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
@@ -148,6 +148,7 @@ def main():
     split_percent     = args.split
     sensors_folder    = args.sensors
     w_size, h_size    = list(map(int, args.img_size.split(',')))
+    encoder_size      = args.encoder_size
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
