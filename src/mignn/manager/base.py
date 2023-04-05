@@ -36,7 +36,7 @@ class LightGraphManager():
         return final_dict_graph
     
     @staticmethod
-    def vstack(light_graph: LightGraphContainer) -> LightGraphContainer:
+    def vstack(light_graph: LightGraphContainer, verbose: bool=True) -> LightGraphContainer:
         """From a light graph container, stack for each key all graphs into one
 
         Args:
@@ -48,8 +48,11 @@ class LightGraphManager():
         
         final_graph = light_graph.from_params(light_graph)
         
+        n_elements = len(light_graph.keys())
+        step = n_elements // 100
+            
         # for each key stack all associated graph
-        for key, graphs in light_graph.items():
+        for idx, (key, graphs) in enumerate(light_graph.items()):
             
             # track all graphs data
             origin_list = []
@@ -107,5 +110,9 @@ class LightGraphManager():
             
             # add final graph to expected key
             final_graph.add_graph(key, current_graph)
+            
+            if verbose and (idx % step == 0 or idx >= n_elements - 1):
+                print(f'[Stack] -- progress: {(idx + 1) / n_elements * 100.:.2f}%', \
+                        end='\r' if idx + 1 < n_elements else '\n')
         
         return final_graph
