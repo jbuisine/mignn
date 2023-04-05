@@ -65,11 +65,12 @@ class GraphContainer(ABC):
     def build_connections(self, n_graphs: int, n_nodes_per_graphs: int, n_neighbors: int, \
         verbose: bool=False) -> None: 
         
+        n_step = int(len(self.keys()) / 20.)
         for idx, (key, _) in enumerate(self._graphs.items()):
             
             self._build_pos_connections(key, n_graphs, n_nodes_per_graphs, n_neighbors)
             
-            if verbose:
+            if verbose and ((idx + 1) % n_step == 0):
                 print(f'[Connections build] -- progress: {(idx + 1) / len(self.keys()) * 100.:.2f}%', \
                     end='\r' if idx + 1 < len(self.keys()) else '\n')
             

@@ -35,7 +35,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-w_size, h_size = 4, 4
+w_size, h_size = 16, 16
 encoder_size = 6
 
 def load_sensor_from(fov, origin, target, up):
@@ -107,7 +107,7 @@ def load_gnn_file(params):
 
         gnn_file, scene, ref_image = params
         container = SimpleLightGraphContainer.fromfile(gnn_file, scene, ref_image, verbose=False)
-        container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
+        container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
         build_container = LightGraphManager.vstack(container)
         return build_container
 
@@ -166,7 +166,10 @@ def main():
         
         # multiprocess build of connections
         pool_obj = ThreadPool()
-        params = list(zip(gnn_files, [ mi.load_file(scene_file) for _ in range(len(gnn_files))], ref_images))
+        scene = mi.load_file(scene_file)
+        
+        # load in parallel same scene file, imply error. Here we load multiple scenes
+        params = list(zip(gnn_files, [ scene for _ in range(len(gnn_files))], ref_images))
         
         build_containers = []
         for result in tqdm.tqdm(pool_obj.imap_unordered(load_gnn_file, params), total=len(params)):
