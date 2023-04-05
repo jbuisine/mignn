@@ -84,8 +84,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         # save image as exr and reload it using cv2
         image_path = f'/tmp/{str(uuid.uuid4())}.exr'
         cv2.imwrite(image_path, np.asarray(image))
-        exr_image = np.asarray(cv2.imread(image_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
-        ref_images.append(exr_image)
+        ref_images.append(image_path)
         
         # print(f' -- reference of view n°{view_i+1} generated...')
         params = mi.traverse(scene)
@@ -104,22 +103,18 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
 
 def load_gnn_file(params):
 
-    gnn_file, scene_file, output_temp, ref_image = params
-    container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
+    gnn_file, scene_file, output_temp, ref_image_path = params
     
     # [Important] this task cannot be done by multiprocess, need to be done externaly
     # Mitsuba seems to be concurrent package inside same context program
-    container_name = f'{str(uuid.uuid4())}.path'
-    output_container_path = os.path.join(output_temp, container_name)
-    outfile = open(output_container_path, 'wb')
-    dill.dump(container, outfile)
-    outfile.close()
-    
+     
     build_container_name = f'{str(uuid.uuid4())}.path'
     expected_container_path = os.path.join(output_temp, build_container_name)
     
-    process = subprocess.Popen(["python", "build_and_stack.py", \
-        "--container", output_container_path, \
+    process = subprocess.Popen(["python", "load_build_and_stack.py", \
+        "--gnn_file", gnn_file, \
+        "--scene", scene_file, \
+        "--reference", ref_image_path, \
         "--output", expected_container_path])
     process.wait()
     

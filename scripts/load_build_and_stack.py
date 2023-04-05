@@ -1,6 +1,10 @@
 import os
 import argparse
 import dill
+import numpy as np
+
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
+import cv2
 
 import mitsuba as mi
 mi.set_variant('scalar_rgb')
@@ -9,23 +13,28 @@ mi.set_variant('scalar_rgb')
 import warnings
 warnings.filterwarnings('ignore')
 
-
+from mignn.container import SimpleLightGraphContainer
 from mignn.manager import LightGraphManager
 
 
 def main():
     
     parser = argparse.ArgumentParser(description="Simple script only use for building connections")
-    parser.add_argument('--container', type=str, help="dumped contained path", required=True)
+    parser.add_argument('--gnn_file', type=str, help="gnn file data", required=True)
+    parser.add_argument('--scene', type=str, help="mitsuba xml scene", required=True)
+    parser.add_argument('--reference', type=str, help="path of the reference image", required=True)
     parser.add_argument('--output', type=str, help="output built container", required=True)
     
     args = parser.parse_args()
     
-    container_path   = args.container
+    gnn_file         = args.gnn_file
+    scene_file       = args.scene
+    image_path       = args.reference
     output_container = args.output
     
-    # load container
-    container = dill.load(open(container_path, 'rb'))
+    ref_image = np.asarray(cv2.imread(image_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
+    
+    container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
     
     # build connections into container and stack graphs
     container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
