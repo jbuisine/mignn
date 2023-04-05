@@ -80,8 +80,9 @@ def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
-    parser.add_argument('--name', type=str, help="model name", required=True)
     parser.add_argument('--folder', type=str, help="main data folder (where to find model)", required=True)
+    parser.add_argument('--name', type=str, help="model name", required=True)
+    parser.add_argument('--outfile', type=str, help="output image name", required=True)
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
     parser.add_argument('--sensor', type=str, help="specific sensor file", required=True)
     
@@ -90,8 +91,11 @@ def main():
     scene_file        = args.scene
     main_folder       = args.folder
     model_name        = args.name
+    outfile_name      = args.outfile
     encoder_enabled   = args.encoder
     sensor_file       = args.sensor
+    
+    output_name = outfile_name.split('.')[0]
     
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
@@ -106,7 +110,7 @@ def main():
         print(f'LookAt: [origin: {origin}, target: {target}, up: {up}], Fov: {fov}')
         sensor = load_sensor_from(fov, origin, target, up)
     
-    dataset_path = f'{main_folder}/predictions/datasets/{model_name}'
+    dataset_path = f'{main_folder}/predictions/datasets/{output_name}'
     
     if not os.path.exists(dataset_path):
     
@@ -159,7 +163,7 @@ def main():
     # y_scaler = skload(f'{model_folder}/y_scaler.bin')
     
  
-    scaled_dataset_path = f'{main_folder}/predictions/datasets/{model_name}_scaled'
+    scaled_dataset_path = f'{main_folder}/predictions/datasets/{output_name}_scaled'
     
     if encoder_enabled:
         print('[Encoded required] scaled data will be encoded')
@@ -220,7 +224,7 @@ def main():
     image = np.array(pixels).reshape((h_size, w_size, 3))
     
     os.makedirs(f'{main_folder}/predictions', exist_ok=True)
-    image_path = f'{main_folder}/predictions/{model_name}.exr'
+    image_path = f'{main_folder}/predictions/{outfile_name}.exr'
     mi.util.write_bitmap(image_path, image)
     print(f'Predicted image has been saved into: {image_path}')
     
