@@ -1,11 +1,13 @@
 import os
 import numpy as np
 import argparse
+import dill
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 import uuid
-import random
+import dill
+import subprocess
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -29,10 +31,6 @@ import multiprocessing as mp
 from multiprocessing.pool import ThreadPool
 
 from models.gcn_model import GNNL
-
-# ignore Drjit warning
-import warnings
-warnings.filterwarnings('ignore')
 
 
 w_size, h_size = 16, 16
@@ -103,14 +101,32 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         
     return output_gnn_files, ref_images
 
+
 def load_gnn_file(params):
 
-        gnn_file, scene, ref_image = params
-        container = SimpleLightGraphContainer.fromfile(gnn_file, scene, ref_image, verbose=False)
-        container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
-        build_container = LightGraphManager.vstack(container)
-        return build_container
-
+    gnn_file, scene_file, output_temp, ref_image = params
+    container = SimpleLightGraphContainer.fromfile(gnn_file, scene_file, ref_image, verbose=False)
+    
+    # [Important] this task cannot be done by multiprocess, need to be done externaly
+    # Mitsuba seems to be concurrent package inside same context program
+    container_name = f'{str(uuid.uuid4())}.path'
+    output_container_path = os.path.join(output_temp, container_name)
+    outfile = open(output_container_path, 'wb')
+    dill.dump(container, outfile)
+    outfile.close()
+    
+    build_container_name = f'{str(uuid.uuid4())}.path'
+    expected_container_path = os.path.join(output_temp, build_container_name)
+    
+    process = subprocess.Popen(["python", "build_and_stack.py", \
+        "--container", output_container_path, \
+        "--output", expected_container_path])
+    process.wait()
+    
+    build_container = dill.load(open(expected_container_path, 'rb'))
+        
+    return build_container
+    
 def main():
     
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
@@ -163,18 +179,24 @@ def main():
                                     sensors = sensors, 
                                     output_folder = f'{output_folder}/train/generated/{model_name}')
         
+          
         
+        output_temp = f'{output_folder}/train/temp/'
+        os.makedirs(output_temp, exist_ok=True)
+                  
         # multiprocess build of connections
         pool_obj = ThreadPool()
-        scene = mi.load_file(scene_file)
         
         # load in parallel same scene file, imply error. Here we load multiple scenes
-        params = list(zip(gnn_files, [ scene for _ in range(len(gnn_files))], ref_images))
+        params = list(zip(gnn_files, 
+                    [ scene_file for _ in range(len(gnn_files)) ], 
+                    [ output_temp for _ in range(len(gnn_files)) ],
+                    ref_images))
         
         build_containers = []
         for result in tqdm.tqdm(pool_obj.imap_unordered(load_gnn_file, params), total=len(params)):
             build_containers.append(result)
-            
+                     
         merged_graph_container = LightGraphManager.fusion(build_containers)
         print('[merged]', merged_graph_container)
         

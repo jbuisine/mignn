@@ -15,7 +15,7 @@ class AdvancedLightGraphContainer(LightGraphContainer):
         
         super().__init__(scene_file, reference, variant)
         
-    def _build_pos_connections(self, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
+    def _build_pos_connections(self, scene, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
         """
         For each position from current film, new connections are tempted to be build:
         - n_graphs: number of graphs to update
@@ -23,8 +23,6 @@ class AdvancedLightGraphContainer(LightGraphContainer):
         - n_neighbors: number of neighbors graph to take in account 
         """
         
-        mi.set_variant(self._mi_variant)
-        scene = self._scene
         sensor = scene.sensors()[0]
         sampler = sensor.sampler()
         bsdf_ctx = mi.BSDFContext()

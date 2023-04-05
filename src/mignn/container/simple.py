@@ -18,7 +18,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
         super().__init__(scene_file, reference, variant)
  
         
-    def _build_pos_connections(self, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
+    def _build_pos_connections(self, scene, pos, n_graphs, n_nodes_per_graphs, n_neighbors):
         """
         For each position from current film, new connections are tempted to be build:
         - n_graphs: number of graphs to update
@@ -61,7 +61,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
                         ray = mi.Ray3f(origin, normalized_d)
 
                         # try intersect using this ray
-                        si = self._scene.ray_intersect(ray)
+                        si = scene.ray_intersect(ray)
                         
                         # if connections exists, then the node is also attached to the graph
                         # new bi-directionnal connections are created between `node` and 
