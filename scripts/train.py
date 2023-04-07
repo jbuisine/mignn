@@ -38,6 +38,7 @@ def main():
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
     parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
+    parser.add_argument('--nsamples', type=str, help="Number of GNN file sample per sensor", default=1)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
     parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
 
@@ -50,6 +51,7 @@ def main():
     encoder_enabled   = args.encoder
     split_percent     = args.split
     sensors_folder    = args.sensors
+    sensors_n_samples = args.nsamples
     w_size, h_size    = list(map(int, args.img_size.split(',')))
     encoder_size      = args.encoder_size
 
@@ -62,7 +64,11 @@ def main():
         file_path = os.path.join(sensors_folder, file)
 
         sensor = load_sensor_from((w_size, h_size), file_path)
-        sensors.append(sensor)
+
+        # Use a number of times the same sensors in order to increase knowledge
+        # Multiple GNN files will be generated
+        for i in range(sensors_n_samples):
+            sensors.append(sensor)
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/train/datasets/{model_name}'
@@ -93,6 +99,8 @@ def main():
         for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
             build_containers.append(result)
 
+        # fusion pixels grids (note here: each container correspond to a viewpoint)
+        # avoid to vstack now (loss of individual viewpoints)
         merged_graph_container = LightGraphManager.fusion(build_containers)
         print('[merged]', merged_graph_container)
 

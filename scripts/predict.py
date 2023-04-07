@@ -208,7 +208,7 @@ def main():
         axs[p_i, 1].axis('off')
 
         axs[p_i, 2].imshow(ref_image)
-        axs[p_i, 2].set_title('Reference ({viewpoint_name})')
+        axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 
     plt.savefig(f'{output_folder}/report.pdf')

@@ -18,6 +18,7 @@ class GraphContainer(ABC):
         self._n_built_connections = 0
         self._n_built_nodes = 0
         self._graphs = {}
+        self._scene_file = None
         
     @property
     def n_graphs(self) -> int:
@@ -49,6 +50,10 @@ class GraphContainer(ABC):
     def add_graphs(self, pos: tuple[int, int], graphs: Graph) -> None:
         
         pos = tuple(pos)
+        
+        if pos not in self._graphs:
+            self._graphs[pos] = []
+            
         if isinstance(graphs, list):
             self._graphs[pos] += graphs
         
@@ -65,7 +70,7 @@ class GraphContainer(ABC):
     def build_connections(self, n_graphs: int, n_nodes_per_graphs: int, n_neighbors: int, \
         verbose: bool=False) -> None: 
         
-        # load only scene once
+        # TODO: load only scene once: improve this part (not a common behavior)
         scene = mi.load_file(self._scene_file)
         
         n_elements = len(self.keys())
@@ -151,8 +156,8 @@ class LightGraphContainer(GraphContainer, ABC):
         
         # init same container with same expected keys but empty
         container_instance = cls(container.scene_file, container.reference, container.variant)
-        empty_dict_keys = dict(zip(container.keys(), [ [] for _ in container.keys() ]))
-        container_instance._init_graphs(empty_dict_keys)
+        # empty_dict_keys = dict(zip(container.keys(), [ [] for _ in container.keys() ]))
+        # container_instance._init_graphs(empty_dict_keys)
         
         return container_instance
        
