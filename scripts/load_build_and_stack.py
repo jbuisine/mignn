@@ -40,8 +40,8 @@ def main():
     # Or try to doing this before? By Splitting and cropping
 
     # build connections into container and stack graphs
-    container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=True)
-    build_container = LightGraphManager.vstack(container)
+    container.build_connections(n_graphs=10, n_nodes_per_graphs=5, n_neighbors=5, verbose=False)
+    build_container = LightGraphManager.vstack(container, verbose=False)
 
     # save new obtained container
     folder, _ = os.path.split(output_container)

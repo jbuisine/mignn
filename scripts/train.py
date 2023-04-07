@@ -38,7 +38,7 @@ def main():
     parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
     parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
-    parser.add_argument('--nsamples', type=str, help="Number of GNN file sample per sensor", default=1)
+    parser.add_argument('--nsamples', type=int, help="Number of GNN file sample per sensor", default=1)
     parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
     parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
 
