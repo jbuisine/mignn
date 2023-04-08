@@ -9,9 +9,11 @@ from mignn.dataset import PathLightDataset
 
 import torch
 from torch_geometric.loader import DataLoader
+import torch_geometric.transforms as GeoT
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 from joblib import dump as skdump
+from joblib import load as skload
 from torchmetrics import R2Score
 
 import tqdm
@@ -19,10 +21,12 @@ from multiprocessing.pool import ThreadPool
 
 from models.gcn_model import GNNL
 
-from config import REF_SPP, GNN_SPP, MAX_DEPTH
-from utils import prepare_data, scale_data
+from utils import prepare_data
 from utils import load_sensor_from, load_build_and_stack
 
+from transforms import ScalerTransform, SignalEncoder
+
+import config as MIGNNConf
 
 def main():
 
@@ -30,27 +34,21 @@ def main():
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--output', type=str, help="output folder", required=True)
     parser.add_argument('--name', type=str, help="output model name", required=True)
-    parser.add_argument('--epochs', type=int, help="expected number of epochs", required=False, default=10)
-    parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
-    parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
-    parser.add_argument('--nsamples', type=int, help="Number of GNN file sample per sensor", default=1)
-    parser.add_argument('--split', type=float, help="split percent \in [0, 1]", required=False, default=0.8)
-    parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
-
+    
     args = parser.parse_args()
 
     scene_file        = args.scene
     output_folder     = args.output
     model_name        = args.name
-    n_epochs          = args.epochs
-    encoder_enabled   = args.encoder
-    split_percent     = args.split
     sensors_folder    = args.sensors
-    sensors_n_samples = args.nsamples
-    w_size, h_size    = list(map(int, args.img_size.split(',')))
-    encoder_size      = args.encoder_size
 
+    # Some MIGNN params 
+    split_percent     = MIGNNConf.TRAINING_SPLIT
+    w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
+    sensors_n_samples = MIGNNConf.VIEWPOINT_SAMPLES
+    n_epochs          = MIGNNConf.EPOCHS
+    
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # use of: https://github.com/prise-3d/vpbrt
@@ -68,19 +66,29 @@ def main():
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/train/datasets/{model_name}'
+    scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
 
+    model_folder = f'{output_folder}/models/{model_name}'
+    stats_folder = f'{output_folder}/stats/{model_name}'
+    os.makedirs(model_folder, exist_ok=True)
+    os.makedirs(stats_folder, exist_ok=True)
+    
     if not os.path.exists(dataset_path):
         gnn_folders, ref_images, _ = prepare_data(scene_file,
-                                    max_depth = MAX_DEPTH,
-                                    data_spp = GNN_SPP,
-                                    ref_spp = REF_SPP,
+                                    max_depth = MIGNNConf.MAX_DEPTH,
+                                    data_spp = MIGNNConf.GNN_SPP,
+                                    ref_spp = MIGNNConf.REF_SPP,
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/train/generated/{model_name}')
 
 
-
+        # multiple datasets to avoid memory overhead
         output_temp = f'{output_folder}/train/temp/'
         os.makedirs(output_temp, exist_ok=True)
+        
+        # same for scaled datasets
+        output_temp_scaled = f'{output_folder}/train/temp_scaled/'
+        os.makedirs(output_temp_scaled, exist_ok=True)
 
         # multiprocess build of connections
         pool_obj = ThreadPool()
@@ -98,76 +106,120 @@ def main():
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
         intermediate_datasets = []
-        intermediate_datasets_path = os.listdir(output_temp)
+        # ensure file orders
+        intermediate_datasets_path = sorted(os.listdir(output_temp))
         
         for dataset_name in intermediate_datasets_path:
             c_dataset_path = os.path.join(output_temp, dataset_name)
             c_dataset = PathLightDataset(root=c_dataset_path)
             intermediate_datasets.append(c_dataset)
             
-        
-        dataset = PathLightDataset.fusion(intermediate_datasets, dataset_path)
+        concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
+        concatenated_dataset = PathLightDataset(dataset_path, concat_datasets)
         print(f'[Intermediate save] save computed dataset into: {dataset_path}')
 
         # merged_graph_container = LightGraphManager.fusion(build_containers)
         # print('[merged]', merged_graph_container)
-
-        # after fusion, we can clear 
-        print(f'[cleaning] clear intermediated saved datasets into {output_temp}')
-        os.system(f'rm -r {output_temp}')
+            
         
+        # prepare splitted dataset
+        split_index = int(len(concatenated_dataset) * split_percent)
+        train_dataset = concatenated_dataset[:split_index]
+        
+        print(f'Dataset with {len(concatenated_dataset)} graphs (percent split: {split_percent})')
+        
+        # Later use of pre_transform function of datasets in order to save data
+        # normalize data
+        x_scaler = MinMaxScaler().fit(train_dataset.data.x)
+        edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
+        y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape(-1, 3))
 
-    dataset = PathLightDataset(root=dataset_path)
-    print(f'Dataset with {len(dataset)} graphs (percent split: {split_percent})')
-
-    split_index = int(len(dataset) * split_percent)
-    train_dataset = dataset[:split_index]
-    test_dataset = dataset[split_index:]
-
-    model_folder = f'{output_folder}/models/{model_name}'
-    stats_folder = f'{output_folder}/stats/{model_name}'
-    os.makedirs(model_folder, exist_ok=True)
-    os.makedirs(stats_folder, exist_ok=True)
-
-    # normalize data
-    x_scaler = MinMaxScaler().fit(train_dataset.data.x)
-    edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
-    y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape(-1, 3))
-
-    skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
-    skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
-    skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
-
-    if encoder_enabled:
-        print('[Encoded required] scaled data will be encoded')
-
-    scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
-
-    if not os.path.exists(f'{scaled_dataset_path}.train'):
+        skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
+        skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
+        skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
 
         scalers = {
             'x_node': x_scaler,
             'x_edge': edge_scaler,
             'y': y_scaler
         }
+        
+        transforms_list = [ScalerTransform(scalers)]
+        
+        if MIGNNConf.ENCODING is not None:
+            print('[Encoded required] scaled data will be encoded')
+            transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
-        scaled_data_list = scale_data(dataset, scalers, encoder_enabled, encoder_size)
+        applied_transforms = GeoT.Compose(transforms_list)    
 
-        # save dataset
-        print(f'Save scaled train and test dataset into: {scaled_dataset_path}')
-        PathLightDataset(f'{scaled_dataset_path}.train', scaled_data_list[:split_index])
-        PathLightDataset(f'{scaled_dataset_path}.test', scaled_data_list[split_index:])
+        
+        # applied transformations over all intermediate path light dataset
+        # avoid memory overhead
+        if not os.path.exists(f'{scaled_dataset_path}.train'):
+            
+            intermediate_scaled_datasets = []
+            intermediate_datasets_path = sorted(os.listdir(output_temp))
+            
+            n_subsets = len(intermediate_datasets_path)
+            step = (n_subsets // 100) + 1
+            
+            for idx, dataset_name in enumerate(intermediate_datasets_path):
+                c_dataset_path = os.path.join(output_temp, dataset_name)
+                c_dataset = PathLightDataset(root=c_dataset_path)
+                
+                c_scaled_dataset_path = os.path.join(output_temp_scaled, dataset_name)
+                scaled_dataset = PathLightDataset(c_scaled_dataset_path, c_dataset, pre_transform=applied_transforms)
+                
+                if (idx % step == 0 or idx >= n_subsets - 1):
+                    print(f'[Scaling] -- progress: {(idx + 1) / n_subsets * 100.:.2f}%', \
+                        end='\r' if idx + 1 < n_subsets else '\n')
+                
+                # now transform dataset using scaler and encoding
+                intermediate_scaled_datasets.append(scaled_dataset)
+
+            scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
+            scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, scaled_concat_datasets)
+        
+            # save scaled dataset
+            print(f'Save scaled train and test dataset into: {scaled_dataset_path}')
+            PathLightDataset(f'{scaled_dataset_path}.train', 
+                            scaled_concatenated_dataset[:split_index])
+            PathLightDataset(f'{scaled_dataset_path}.test', 
+                            scaled_concatenated_dataset[split_index:])
+        
+            print('[cleaning] clear intermediates saved datasets...')
+            os.system(f'rm -r {output_temp}')
+            os.system(f'rm -r {output_temp_scaled}')
+            os.system(f'rm -r {scaled_dataset_path}') # remove also previous computed dataset
+
+    # need to reload scalers and transformers?
+    # x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
+    # edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
+    # y_scaler = skload(f'{model_folder}/y_scaler.bin')
+
+    # scalers = {
+    #     'x_node': x_scaler,
+    #     'x_edge': edge_scaler,
+    #     'y': y_scaler
+    # }
+
+    # transforms_list = [ScalerTransform(scalers)]
+    
+    # if MIGNNConf.ENCODING is not None:
+    #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+
+    # applied_transforms = GeoT.Compose(transforms_list)    
 
     print(f'Load scaled dataset from: `{scaled_dataset_path}.train` and `{scaled_dataset_path}.test`')
     train_dataset = PathLightDataset(root=f'{scaled_dataset_path}.train')
     test_dataset = PathLightDataset(root=f'{scaled_dataset_path}.test')
     print(f'Example of scaled element from train dataset: {train_dataset[0]}')
 
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
 
     print('Prepare model: ')
-    model = GNNL(hidden_channels=256, n_features=train_dataset.num_node_features).to(device)
+    model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=train_dataset.num_node_features).to(device)
     # model.to(device)
     print(model)
     print(f'Number of params: {sum(p.numel() for p in model.parameters())}')

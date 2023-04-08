@@ -9,9 +9,6 @@ mi.set_variant("scalar_rgb")
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 
-
-from config import REF_SPP, GNN_SPP, MAX_DEPTH
-
 from mignn.dataset import PathLightDataset
 
 import torch
@@ -19,7 +16,7 @@ from joblib import load as skload
 
 from models.gcn_model import GNNL
 
-from utils import scale_data, prepare_data
+from utils import prepare_data
 from utils import load_sensor_from, load_build_and_stack
 import matplotlib.pyplot as plt
 
@@ -27,6 +24,11 @@ import tqdm
 from multiprocessing.pool import ThreadPool
 from skimage.metrics import mean_squared_error as MSE
 from skimage.metrics import structural_similarity as SSIM
+
+import torch_geometric.transforms as GeoT
+from transforms import ScalerTransform, SignalEncoder
+
+import config as MIGNNConf
 
 # ignore Drjit warning
 import warnings
@@ -38,21 +40,18 @@ def main():
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--model', type=str, help="where to find saved model", required=True)
     parser.add_argument('--output', type=str, help="output data folder", required=True)
-    parser.add_argument('--encoder', type=int, help="encoding data or not", required=False, default=False)
-    parser.add_argument('--encoder_size', type=int, help="encoding size per feature", required=False, default=6)
     parser.add_argument('--sensors', type=str, help="specific sensors folder", required=True)
-    parser.add_argument('--img_size', type=str, help="expected computed image size: 128,128", required=False, default="128,128")
-
+    
     args = parser.parse_args()
 
     scene_file        = args.scene
     model_folder      = args.model
     output_folder     = args.output
-    encoder_enabled   = args.encoder
-    encoder_size      = args.encoder_size
     sensors_folder    = args.sensors
-    w_size, h_size    = list(map(int, args.img_size.split(',')))
-
+    
+    # MIGNN param
+    w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
+    
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -74,9 +73,9 @@ def main():
     low_res_images = []
 
     gnn_files, ref_images, low_images = prepare_data(scene_file,
-                            max_depth = MAX_DEPTH,
-                            data_spp = GNN_SPP,
-                            ref_spp = REF_SPP,
+                            max_depth = MIGNNConf.MAX_DEPTH,
+                            data_spp = MIGNNConf.GNN_SPP,
+                            ref_spp = MIGNNConf.REF_SPP,
                             sensors = sensors,
                             output_folder = f'{output_folder}/generated')
 
@@ -108,8 +107,10 @@ def main():
             c_dataset = PathLightDataset(root=c_dataset_path)
             intermediate_datasets.append(c_dataset)
             
+        # use concat dataset
         dataset_path = f'{output_folder}/datasets/{viewpoint}'        
-        dataset = PathLightDataset.fusion(intermediate_datasets, dataset_path)
+        concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
+        dataset = PathLightDataset(dataset_path, concat_datasets)
         print(f' -- [Intermediate save] save computed dataset into: {dataset_path}')
         datasets_path.append(dataset_path)
 
@@ -133,27 +134,30 @@ def main():
 
         scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
 
-        if encoder_enabled:
+        if MIGNNConf.ENCODING is not None:
             print(' -- [Encoded required] scaled data will be encoded')
 
+        scalers = {
+            'x_node': x_scaler,
+            'x_edge': edge_scaler,
+            'y': y_scaler
+        }
+        
+        transforms = GeoT.Compose([ScalerTransform(scalers), SignalEncoder(MIGNNConf.ENCODING)])
+
+        # TODO: check if necessary to apply transformation over this dataset
+        # such as train process
         if not os.path.exists(scaled_dataset_path):
 
-            scalers = {
-                'x_node': x_scaler,
-                'x_edge': edge_scaler,
-                'y': y_scaler
-            }
-
-            scaled_data_list = scale_data(dataset, scalers, encoder_enabled, encoder_size)
-
             # save dataset
-            print(f' -- Save scaled dataset into: {scaled_dataset_path}')
-            PathLightDataset(scaled_dataset_path, scaled_data_list)
+            print(f' -- Save scaled dataset into: {scaled_dataset_path} (may take few minutes)')
+            PathLightDataset(scaled_dataset_path, dataset, 
+                            pre_transform=transforms)
 
         print(f' -- Load scaled dataset from: {scaled_dataset_path}')
-        dataset = PathLightDataset(root=scaled_dataset_path)
+        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=transforms)
 
-        model = GNNL(hidden_channels=256, n_features=dataset.num_node_features)
+        model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
         print(' -- Model has been loaded')
 
         model.load_state_dict(torch.load(f'{model_folder}/model.pt'))

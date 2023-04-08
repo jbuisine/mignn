@@ -8,17 +8,13 @@ os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 import subprocess
 from collections import defaultdict
+from itertools import islice
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
 
-from torch_geometric.data import Data
+import config as MIGNNConf
 
-from mignn.processing.encoder import signal_encoder
-
-from config import CHUNK_SIZE
-
-from itertools import islice
 
 def chunks_dict(data, size=10000):
     
@@ -143,7 +139,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
             os.makedirs(gnn_log_folder, exist_ok=True)
             
             # need to chunk file by pixels keys
-            chunk_file(gnn_log_filename, gnn_log_folder, CHUNK_SIZE)
+            chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.CHUNK_SIZE)
             
             # now remove initial log file
             os.system(f'rm {gnn_log_filename}')
@@ -154,42 +150,6 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
         output_gnn_folders.append(gnn_log_folder)
 
     return output_gnn_folders, ref_images, low_images
-
-
-def scale_data(dataset, scalers, encoding=False, encoder_size=None):
-
-    scaled_data_list = []
-
-    x_scaler = scalers['x_node']
-    edge_scaler = scalers['x_edge']
-    y_scaler = scalers['y']
-
-    n_graphs = len(dataset)
-    for d_i in range(n_graphs):
-
-        data = dataset[d_i]
-
-        # perform scale and then encoding
-        x_data = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
-        x_edge_data = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
-        y_data = torch.tensor(y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
-
-        if encoding:
-            x_data = signal_encoder(x_data, L=encoder_size)
-            x_edge_data = signal_encoder(x_edge_data, L=encoder_size)
-
-        scaled_data = Data(x = x_data,
-                edge_index = data.edge_index,
-                y = y_data,
-                edge_attr = x_edge_data,
-                pos = data.pos)
-
-        scaled_data_list.append(scaled_data)
-
-        print(f' -- [Prepare scaled torch data] progress: {(d_i + 1) / n_graphs * 100.:.2f}%', end='\r')
-
-    return scaled_data_list
-
 
 
 def load_build_and_stack(params):

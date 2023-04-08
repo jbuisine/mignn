@@ -4,9 +4,9 @@ from torch_geometric.data import InMemoryDataset, Data
 from mignn.container import SimpleLightGraphContainer
 
 class PathLightDataset(InMemoryDataset):
-    def __init__(self, root, data_list=None, transform=None):
+    def __init__(self, root, data_list=None, transform=None, pre_transform=None):
         self.data_list = data_list
-        super().__init__(root, transform, log=False)
+        super().__init__(root, transform, pre_transform, log=False)
         self.data, self.slices = torch.load(self.processed_paths[0])
     
     @property
@@ -21,27 +21,19 @@ class PathLightDataset(InMemoryDataset):
         pass
 
     def process(self):
-        torch.save(self.collate(self.data_list), self.processed_paths[0])
         
-    @staticmethod
-    def fusion(datasets, output_path: str, verbose=True):
-        
-        data_list = []
-        n_datasets = len(datasets)
-        step = (n_datasets // 100) + 1
-        
-        for idx, dataset in enumerate(datasets):
+        processed_data_list = []
+        if self.pre_transform is not None:
             
-            for d_id in range(len(dataset)):
-                data_list.append(dataset[d_id])
-                
-                
-            if verbose and (idx % step == 0 or idx >= n_datasets - 1):
-                print(f'[Fusion datasets] progress: {(idx + 1) / n_datasets * 100.:.0f}%', end='\r')
-
-        print(len(data_list))
-        return PathLightDataset(output_path, data_list)
+            # TODO: check if possible to do chunks
+            for i, _ in enumerate(self.data_list):
+                processed_data_list.append(self.pre_transform(self.data_list[i]))
+                    
+            torch.save(self.collate(processed_data_list), self.processed_paths[0])
             
+        else:
+            torch.save(self.collate(self.data_list), self.processed_paths[0])
+                 
     @staticmethod
     def from_container(container: SimpleLightGraphContainer, output_path: str, \
         verbose: bool=True):
