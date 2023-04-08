@@ -54,7 +54,7 @@ class LightGraphManager():
         final_graph = light_graph.from_params(light_graph)
 
         n_elements = len(light_graph.keys())
-        step = n_elements // 100
+        step = (n_elements // 100) + 1
 
         # for each key stack all associated graph
         for idx, (key, graphs) in enumerate(light_graph.items()):

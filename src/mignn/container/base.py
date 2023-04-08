@@ -47,6 +47,23 @@ class GraphContainer(ABC):
     def graphs(self) -> List[Graph]:
         return list(chain(*[ v for _, v in self._graphs.items() ]))
     
+    def split(self, n_chunks: int) -> List:
+        
+        n_keys = len(self.keys())
+        chunk_list = [self.keys()[i: i + n_chunks] for i in range(0, n_keys, n_chunks)]
+        
+        containers_list = []
+        for chunk in chunk_list:
+            
+            container = self.from_params(self)
+            
+            for key in chunk:
+                container.add_graphs(key, self.graphs_at(key))
+
+            containers_list.append(container)
+            
+        return containers_list
+    
     def add_graphs(self, pos: tuple[int, int], graphs: Graph) -> None:
         
         pos = tuple(pos)
@@ -74,7 +91,7 @@ class GraphContainer(ABC):
         scene = mi.load_file(self._scene_file)
         
         n_elements = len(self.keys())
-        step = n_elements // 100
+        step = (n_elements // 100) + 1
         for idx, (key, _) in enumerate(self._graphs.items()):
             
             self._build_pos_connections(scene, key, n_graphs, n_nodes_per_graphs, n_neighbors)
@@ -112,7 +129,7 @@ class GraphContainer(ABC):
 
             lines = f_light_path.readlines()
             n_lines = len(lines)
-            step = n_lines // 100
+            step = (n_lines // 100) + 1
             for idx, line in enumerate(lines):
 
                 pos, graph = self._extract_light_grath(line)

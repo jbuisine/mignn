@@ -9,7 +9,9 @@ mi.set_variant("scalar_rgb")
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 
-from mignn.manager import LightGraphManager
+
+from config import REF_SPP, GNN_SPP, MAX_DEPTH
+
 from mignn.dataset import PathLightDataset
 
 import torch
@@ -72,13 +74,13 @@ def main():
     low_res_images = []
 
     gnn_files, ref_images, low_images = prepare_data(scene_file,
-                            max_depth = 5,
-                            data_spp = 10,
-                            ref_spp = 1000,
+                            max_depth = MAX_DEPTH,
+                            data_spp = GNN_SPP,
+                            ref_spp = REF_SPP,
                             sensors = sensors,
                             output_folder = f'{output_folder}/generated')
 
-    output_temp = f'{output_folder}/train/temp/'
+    output_temp = f'{output_folder}/datasets/temp/'
     os.makedirs(output_temp, exist_ok=True)
 
     # multiprocess build of connections
@@ -87,7 +89,7 @@ def main():
     # load in parallel same scene file, imply error. Here we load multiple scenes
     params = list(zip(gnn_files,
                 [ scene_file for _ in range(len(gnn_files)) ],
-                [ output_temp for _ in range(len(gnn_files)) ],
+                [ os.path.join(output_temp, v) for v in viewpoints ],
                 ref_images))
 
     build_containers = []
@@ -95,11 +97,19 @@ def main():
         build_containers.append(result)
 
     datasets_path = []
-    for c_i, container in enumerate(build_containers):
-        viewpoint = viewpoints[c_i]
-        dataset_path = f'{output_folder}/datasets/{viewpoint}'
-
-        PathLightDataset.from_container(container, dataset_path)
+    for v_i, viewpoint in enumerate(viewpoints):
+        
+        viewpoint_temp = os.path.join(output_temp, viewpoint)
+        intermediate_datasets = []
+        intermediate_datasets_path = os.listdir(viewpoint_temp)
+        
+        for dataset_name in intermediate_datasets_path:
+            c_dataset_path = os.path.join(viewpoint_temp, dataset_name)
+            c_dataset = PathLightDataset(root=c_dataset_path)
+            intermediate_datasets.append(c_dataset)
+            
+        dataset_path = f'{output_folder}/datasets/{viewpoint}'        
+        dataset = PathLightDataset.fusion(intermediate_datasets, dataset_path)
         print(f' -- [Intermediate save] save computed dataset into: {dataset_path}')
         datasets_path.append(dataset_path)
 
@@ -119,7 +129,7 @@ def main():
 
         x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
         edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-        # y_scaler = skload(f'{model_folder}/y_scaler.bin')
+        y_scaler = skload(f'{model_folder}/y_scaler.bin')
 
         scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
 
@@ -130,7 +140,8 @@ def main():
 
             scalers = {
                 'x_node': x_scaler,
-                'x_edge': edge_scaler
+                'x_edge': edge_scaler,
+                'y': y_scaler
             }
 
             scaled_data_list = scale_data(dataset, scalers, encoder_enabled, encoder_size)
@@ -155,8 +166,8 @@ def main():
 
             data = dataset[b_i]
             prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
-            # prediction = y_scaler.inverse_transform(prediction.detach().numpy())
-            pixels.append(prediction.detach().numpy())
+            prediction = y_scaler.inverse_transform(prediction.detach().numpy())
+            pixels.append(prediction)
 
             print(f' -- Prediction progress: {(b_i + 1) / len(dataset) * 100.:.2f}%', end='\r')
 

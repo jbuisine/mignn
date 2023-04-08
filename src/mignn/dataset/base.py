@@ -24,6 +24,25 @@ class PathLightDataset(InMemoryDataset):
         torch.save(self.collate(self.data_list), self.processed_paths[0])
         
     @staticmethod
+    def fusion(datasets, output_path: str, verbose=True):
+        
+        data_list = []
+        n_datasets = len(datasets)
+        step = (n_datasets // 100) + 1
+        
+        for idx, dataset in enumerate(datasets):
+            
+            for d_id in range(len(dataset)):
+                data_list.append(dataset[d_id])
+                
+                
+            if verbose and (idx % step == 0 or idx >= n_datasets - 1):
+                print(f'[Fusion datasets] progress: {(idx + 1) / n_datasets * 100.:.0f}%', end='\r')
+
+        print(len(data_list))
+        return PathLightDataset(output_path, data_list)
+            
+    @staticmethod
     def from_container(container: SimpleLightGraphContainer, output_path: str, \
         verbose: bool=True):
         
@@ -31,7 +50,7 @@ class PathLightDataset(InMemoryDataset):
         data_list = []
         
         n_keys = len(container.keys())
-        step = n_keys // 100
+        step = (n_keys // 100) + 1
         
         for idx, (_, graphs) in enumerate(container.items()):
             

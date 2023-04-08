@@ -1,21 +1,16 @@
 import os
 import argparse
-import dill
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
 mi.set_variant("scalar_rgb")
 
-from mignn.container import SimpleLightGraphContainer
-from mignn.manager import LightGraphManager
 from mignn.dataset import PathLightDataset
-from mignn.processing.encoder import signal_encoder
 
 import torch
 from torch_geometric.loader import DataLoader
-from torch_geometric.data import Data
 
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 from joblib import dump as skdump
 from torchmetrics import R2Score
 
@@ -24,6 +19,7 @@ from multiprocessing.pool import ThreadPool
 
 from models.gcn_model import GNNL
 
+from config import REF_SPP, GNN_SPP, MAX_DEPTH
 from utils import prepare_data, scale_data
 from utils import load_sensor_from, load_build_and_stack
 
@@ -67,17 +63,17 @@ def main():
 
         # Use a number of times the same sensors in order to increase knowledge
         # Multiple GNN files will be generated
-        for i in range(sensors_n_samples):
+        for _ in range(sensors_n_samples):
             sensors.append(sensor)
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/train/datasets/{model_name}'
 
     if not os.path.exists(dataset_path):
-        gnn_files, ref_images, _ = prepare_data(scene_file,
-                                    max_depth = 5,
-                                    data_spp = 10,
-                                    ref_spp = 10000,
+        gnn_folders, ref_images, _ = prepare_data(scene_file,
+                                    max_depth = MAX_DEPTH,
+                                    data_spp = GNN_SPP,
+                                    ref_spp = REF_SPP,
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/train/generated/{model_name}')
 
@@ -90,25 +86,36 @@ def main():
         pool_obj = ThreadPool()
 
         # load in parallel same scene file, imply error. Here we load multiple scenes
-        params = list(zip(gnn_files,
-                    [ scene_file for _ in range(len(gnn_files)) ],
-                    [ output_temp for _ in range(len(gnn_files)) ],
+        params = list(zip(gnn_folders,
+                    [ scene_file for _ in range(len(gnn_folders)) ],
+                    [ output_temp for _ in range(len(gnn_folders)) ],
                     ref_images))
 
         build_containers = []
         for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
             build_containers.append(result)
 
-        # fusion pixels grids (note here: each container correspond to a viewpoint)
-        # avoid to vstack now (loss of individual viewpoints)
-        merged_graph_container = LightGraphManager.fusion(build_containers)
-        print('[merged]', merged_graph_container)
-
-        print(f'[cleaning] clear intermediated saved containers into {output_temp}')
-        os.system(f'rm -r {output_temp}')
-
-        dataset = PathLightDataset.from_container(merged_graph_container, dataset_path)
+        # save intermediate PathLightDataset
+        # Then fusion PathLightDatasets into only one
+        intermediate_datasets = []
+        intermediate_datasets_path = os.listdir(output_temp)
+        
+        for dataset_name in intermediate_datasets_path:
+            c_dataset_path = os.path.join(output_temp, dataset_name)
+            c_dataset = PathLightDataset(root=c_dataset_path)
+            intermediate_datasets.append(c_dataset)
+            
+        
+        dataset = PathLightDataset.fusion(intermediate_datasets, dataset_path)
         print(f'[Intermediate save] save computed dataset into: {dataset_path}')
+
+        # merged_graph_container = LightGraphManager.fusion(build_containers)
+        # print('[merged]', merged_graph_container)
+
+        # after fusion, we can clear 
+        print(f'[cleaning] clear intermediated saved datasets into {output_temp}')
+        os.system(f'rm -r {output_temp}')
+        
 
     dataset = PathLightDataset(root=dataset_path)
     print(f'Dataset with {len(dataset)} graphs (percent split: {split_percent})')
@@ -125,11 +132,11 @@ def main():
     # normalize data
     x_scaler = MinMaxScaler().fit(train_dataset.data.x)
     edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
-    # y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape((-1, 3)))
+    y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape(-1, 3))
 
     skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
     skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
-    # skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
+    skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
 
     if encoder_enabled:
         print('[Encoded required] scaled data will be encoded')
@@ -140,7 +147,8 @@ def main():
 
         scalers = {
             'x_node': x_scaler,
-            'x_edge': edge_scaler
+            'x_edge': edge_scaler,
+            'y': y_scaler
         }
 
         scaled_data_list = scale_data(dataset, scalers, encoder_enabled, encoder_size)
@@ -178,7 +186,7 @@ def main():
             data = data.to(device)
 
             out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)  # Perform a single forward pass.
-            loss = criterion(out.flatten(), data.y)  # Compute the loss.
+            loss = criterion(out.flatten(), data.y.flatten())  # Compute the loss.
             error += loss.item()
             loss.backward()  # Derive gradients.
             r2_error += r2_score(out.flatten(), data.y.flatten()).item()
@@ -198,7 +206,7 @@ def main():
             data = data.to(device)
 
             out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
-            loss = criterion(out.flatten(), data.y)
+            loss = criterion(out.flatten(), data.y.flatten())
             error += loss.item()
             r2_error += r2_score(out.flatten(), data.y.flatten()).item()
         return error / len(loader), r2_error / len(loader)  # Derive ratio of correct predictions.
