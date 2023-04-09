@@ -215,8 +215,9 @@ def main():
     print(f'Load scaled dataset from: `{dataset_path}.train` and `{dataset_path}.test`')
     
     # TODO: use of GPU based dataset?
-    train_dataset = PathLightDataset(root=f'{dataset_path}.train', transform=applied_transforms)
-    test_dataset = PathLightDataset(root=f'{dataset_path}.test', transform=applied_transforms)
+    if train_dataset is None or test_dataset is None:
+        train_dataset = PathLightDataset(root=f'{dataset_path}.train', transform=applied_transforms)
+        test_dataset = PathLightDataset(root=f'{dataset_path}.test', transform=applied_transforms)
     print(f'Example of scaled element from train dataset: {train_dataset[0]}')
 
     train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
