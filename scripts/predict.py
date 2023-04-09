@@ -153,12 +153,11 @@ def main():
         if not os.path.exists(scaled_dataset_path):
 
             # save dataset
-            print(f' -- Save scaled dataset into: {scaled_dataset_path} (may take few minutes)')
-            PathLightDataset(scaled_dataset_path, dataset, 
-                            pre_transform=applied_transforms)
+            print(f' -- Save scaled dataset into: {scaled_dataset_path}')
+            PathLightDataset(scaled_dataset_path, dataset, transform=applied_transforms)
 
         print(f' -- Load scaled dataset from: {scaled_dataset_path}')
-        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=applied_transforms)
+        dataset = PathLightDataset(root=scaled_dataset_path, transform=applied_transforms)
 
         model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
         print(' -- Model has been loaded')

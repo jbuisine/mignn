@@ -125,7 +125,9 @@ def main():
         
         # prepare splitted dataset
         split_index = int(len(concatenated_dataset) * split_percent)
+        print(split_index)
         train_dataset = concatenated_dataset[:split_index]
+        test_dataset = concatenated_dataset[split_index:]
         
         print(f'Dataset with {len(concatenated_dataset)} graphs (percent split: {split_percent})')
         
@@ -145,77 +147,76 @@ def main():
             'y': y_scaler
         }
         
-        transforms_list = [ScalerTransform(scalers)]
+        # transforms_list = [ScalerTransform(scalers)]
         
-        if MIGNNConf.ENCODING is not None:
-            print('[Encoded required] scaled data will be encoded')
-            transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+        # if MIGNNConf.ENCODING is not None:
+        #     print('[Encoded required] scaled data will be encoded')
+        #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
-        applied_transforms = GeoT.Compose(transforms_list)    
+        # applied_transforms = GeoT.Compose(transforms_list)    
 
-        
         # applied transformations over all intermediate path light dataset
         # avoid memory overhead
-        if not os.path.exists(f'{scaled_dataset_path}.train'):
+        # if not os.path.exists(f'{scaled_dataset_path}.train'):
             
-            intermediate_scaled_datasets = []
-            intermediate_datasets_path = sorted(os.listdir(output_temp))
+        #     intermediate_scaled_datasets = []
+        #     intermediate_datasets_path = sorted(os.listdir(output_temp))
             
-            n_subsets = len(intermediate_datasets_path)
-            step = (n_subsets // 100) + 1
+        #     n_subsets = len(intermediate_datasets_path)
+        #     step = (n_subsets // 100) + 1
             
-            for idx, dataset_name in enumerate(intermediate_datasets_path):
-                c_dataset_path = os.path.join(output_temp, dataset_name)
-                c_dataset = PathLightDataset(root=c_dataset_path)
+        #     for idx, dataset_name in enumerate(intermediate_datasets_path):
+        #         c_dataset_path = os.path.join(output_temp, dataset_name)
+        #         c_dataset = PathLightDataset(root=c_dataset_path)
                 
-                c_scaled_dataset_path = os.path.join(output_temp_scaled, dataset_name)
-                scaled_dataset = PathLightDataset(c_scaled_dataset_path, c_dataset, pre_transform=applied_transforms)
+        #         c_scaled_dataset_path = os.path.join(output_temp_scaled, dataset_name)
+        #         scaled_dataset = PathLightDataset(c_scaled_dataset_path, c_dataset, pre_transform=applied_transforms)
                 
-                if (idx % step == 0 or idx >= n_subsets - 1):
-                    print(f'[Scaling] -- progress: {(idx + 1) / n_subsets * 100.:.2f}%', \
-                        end='\r' if idx + 1 < n_subsets else '\n')
+        #         if (idx % step == 0 or idx >= n_subsets - 1):
+        #             print(f'[Scaling] -- progress: {(idx + 1) / n_subsets * 100.:.2f}%', \
+        #                 end='\r' if idx + 1 < n_subsets else '\n')
                 
-                # now transform dataset using scaler and encoding
-                intermediate_scaled_datasets.append(scaled_dataset)
+        #         # now transform dataset using scaler and encoding
+        #         intermediate_scaled_datasets.append(scaled_dataset)
 
-            scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
-            scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, scaled_concat_datasets)
+        #     scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
+        #     scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, scaled_concat_datasets)
         
             # save scaled dataset
-            print(f'Save scaled train and test dataset into: {scaled_dataset_path}')
-            PathLightDataset(f'{scaled_dataset_path}.train', 
-                            scaled_concatenated_dataset[:split_index])
-            PathLightDataset(f'{scaled_dataset_path}.test', 
-                            scaled_concatenated_dataset[split_index:])
-        
-            print('[cleaning] clear intermediates saved datasets...')
-            os.system(f'rm -r {output_temp}')
-            os.system(f'rm -r {output_temp_scaled}')
-            os.system(f'rm -r {scaled_dataset_path}') # remove also previous computed dataset
+        print(f'Save train and test dataset into: {dataset_path}')
+        PathLightDataset(f'{dataset_path}.train', 
+                        train_dataset, transform=applied_transforms)
+        PathLightDataset(f'{dataset_path}.test', 
+                        test_dataset, transform=applied_transforms)
+    
+        print('[cleaning] clear intermediates saved datasets...')
+        os.system(f'rm -r {output_temp}')
+            # os.system(f'rm -r {output_temp_scaled}')
+            # os.system(f'rm -r {scaled_dataset_path}') # remove also previous computed dataset
 
     # need to reload scalers and transformers?
-    # x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
-    # edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-    # y_scaler = skload(f'{model_folder}/y_scaler.bin')
+    x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
+    edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
+    y_scaler = skload(f'{model_folder}/y_scaler.bin')
 
-    # scalers = {
-    #     'x_node': x_scaler,
-    #     'x_edge': edge_scaler,
-    #     'y': y_scaler
-    # }
+    scalers = {
+        'x_node': x_scaler,
+        'x_edge': edge_scaler,
+        'y': y_scaler
+    }
 
-    # transforms_list = [ScalerTransform(scalers)]
+    transforms_list = [ScalerTransform(scalers)]
     
-    # if MIGNNConf.ENCODING is not None:
-    #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+    if MIGNNConf.ENCODING is not None:
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
-    # applied_transforms = GeoT.Compose(transforms_list)    
+    applied_transforms = GeoT.Compose(transforms_list)    
 
-    print(f'Load scaled dataset from: `{scaled_dataset_path}.train` and `{scaled_dataset_path}.test`')
+    print(f'Load scaled dataset from: `{dataset_path}.train` and `{dataset_path}.test`')
     
     # TODO: use of GPU based dataset?
-    train_dataset = PathLightDataset(root=f'{scaled_dataset_path}.train')
-    test_dataset = PathLightDataset(root=f'{scaled_dataset_path}.test')
+    train_dataset = PathLightDataset(root=f'{dataset_path}.train', transform=applied_transforms)
+    test_dataset = PathLightDataset(root=f'{dataset_path}.test', transform=applied_transforms)
     print(f'Example of scaled element from train dataset: {train_dataset[0]}')
 
     train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
