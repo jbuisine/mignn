@@ -12,7 +12,7 @@ N_NODES_PER_GRAPHS  = 5
 N_NEIGHBORS         = 5
 
 # Input data processing params
-ENCODING            = 6 # None means no encoding (by default signal encoding)
+ENCODING            = None # None means no encoding (by default signal encoding)
 
 # dataset generation
 # reduce memory usage while generating dataset

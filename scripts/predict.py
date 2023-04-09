@@ -133,18 +133,21 @@ def main():
         y_scaler = skload(f'{model_folder}/y_scaler.bin')
 
         scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
-
-        if MIGNNConf.ENCODING is not None:
-            print(' -- [Encoded required] scaled data will be encoded')
-
+        
         scalers = {
             'x_node': x_scaler,
             'x_edge': edge_scaler,
             'y': y_scaler
         }
         
-        transforms = GeoT.Compose([ScalerTransform(scalers), SignalEncoder(MIGNNConf.ENCODING)])
+        transforms_list = [ScalerTransform(scalers)]
+        
+        if MIGNNConf.ENCODING is not None:
+            print('[Encoded required] scaled data will be encoded')
+            transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
+        applied_transforms = GeoT.Compose(transforms_list) 
+        
         # TODO: check if necessary to apply transformation over this dataset
         # such as train process
         if not os.path.exists(scaled_dataset_path):
@@ -152,10 +155,10 @@ def main():
             # save dataset
             print(f' -- Save scaled dataset into: {scaled_dataset_path} (may take few minutes)')
             PathLightDataset(scaled_dataset_path, dataset, 
-                            pre_transform=transforms)
+                            pre_transform=applied_transforms)
 
         print(f' -- Load scaled dataset from: {scaled_dataset_path}')
-        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=transforms)
+        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=applied_transforms)
 
         model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
         print(' -- Model has been loaded')

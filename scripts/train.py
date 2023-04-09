@@ -8,6 +8,7 @@ mi.set_variant("scalar_rgb")
 from mignn.dataset import PathLightDataset
 
 import torch
+from torch_geometric.data import Dataset
 from torch_geometric.loader import DataLoader
 import torch_geometric.transforms as GeoT
 
@@ -211,6 +212,8 @@ def main():
     # applied_transforms = GeoT.Compose(transforms_list)    
 
     print(f'Load scaled dataset from: `{scaled_dataset_path}.train` and `{scaled_dataset_path}.test`')
+    
+    # TODO: use of GPU based dataset?
     train_dataset = PathLightDataset(root=f'{scaled_dataset_path}.train')
     test_dataset = PathLightDataset(root=f'{scaled_dataset_path}.test')
     print(f'Example of scaled element from train dataset: {train_dataset[0]}')
