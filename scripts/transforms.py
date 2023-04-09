@@ -29,6 +29,7 @@ class SignalEncoder(BaseTransform):
 
     def __init__(self, encoder_size=6, log_space=False):
         
+        # TODO: specify which data need to be transformed (check other transform)
         self.n_freqs = encoder_size
         self.log_space = log_space
         self.embed_fns = [lambda x: x]
