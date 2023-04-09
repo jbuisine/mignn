@@ -174,6 +174,7 @@ def main():
                 c_dataset = PathLightDataset(root=c_dataset_path)
                 
                 c_scaled_dataset_path = os.path.join(output_temp_scaled, dataset_name)
+
                 scaled_dataset = PathLightDataset(c_scaled_dataset_path, c_dataset, 
                                                 pre_transform=applied_transforms)
                 
@@ -188,13 +189,17 @@ def main():
             scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
             scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, 
                                                     scaled_concat_datasets)
+
+            del train_dataset, test_dataset # remove from memory
+            train_dataset = scaled_concatenated_dataset[:split_index]
+            test_dataset = scaled_concatenated_dataset[split_index:]
         
             # save scaled dataset
             print(f'Save train and test dataset into: {dataset_path}')
             PathLightDataset(f'{dataset_path}.train', 
-                            scaled_concatenated_dataset[:split_index])
+                            train_dataset)
             PathLightDataset(f'{dataset_path}.test', 
-                            scaled_concatenated_dataset[split_index:])
+                            test_dataset)
         
             print('[cleaning] clear intermediates saved datasets...')
             os.system(f'rm -r {output_temp}')
@@ -206,22 +211,22 @@ def main():
             del scaled_concatenated_dataset
 
     # need to reload scalers and transformers?
-    x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
-    edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{model_folder}/y_scaler.bin')
+    # x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
+    # edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
+    # y_scaler = skload(f'{model_folder}/y_scaler.bin')
 
-    scalers = {
-        'x_node': x_scaler,
-        'x_edge': edge_scaler,
-        'y': y_scaler
-    }
+    # scalers = {
+    #     'x_node': x_scaler,
+    #     'x_edge': edge_scaler,
+    #     'y': y_scaler
+    # }
 
-    transforms_list = [ScalerTransform(scalers)]
+    # transforms_list = [ScalerTransform(scalers)]
     
-    if MIGNNConf.ENCODING is not None:
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+    # if MIGNNConf.ENCODING is not None:
+    #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
-    applied_transforms = GeoT.Compose(transforms_list)    
+    # applied_transforms = GeoT.Compose(transforms_list)    
 
     print(f'Load scaled dataset from: `{dataset_path}.train` and `{dataset_path}.test`')
     
