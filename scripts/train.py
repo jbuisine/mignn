@@ -275,11 +275,20 @@ def main():
     stat_file = open(f'{stats_folder}/{model_name}.csv', 'w', encoding='utf-8')
     stat_file.write('train_loss;train_r2;test_loss;test_r2\n')
 
+    # save best only
+    current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
     for epoch in range(1, n_epochs + 1):
         train(epoch)
         train_loss, train_r2 = test(train_loader)
         test_loss, test_r2 = test(test_loader)
+        
+        # save best only
+        if test_r2 > current_best_r2:
+            current_best_r2 = test_r2
 
+            torch.save(model.state_dict(), f'{model_folder}/model.pt')
+            torch.save(optimizer.state_dict(), f'{model_folder}/optimizer.pt')
+            
         # save model stat data
         stat_file.write(f'{train_loss};{train_r2};{test_loss};{test_r2}\n')
 
@@ -287,9 +296,6 @@ def main():
             f'Test (Loss: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
 
     stat_file.close()
-
-    torch.save(model.state_dict(), f'{model_folder}/model.pt')
-    torch.save(optimizer.state_dict(), f'{model_folder}/optimizer.pt')
 
     print(f'Model has been saved into: `{model_folder}`')
 
