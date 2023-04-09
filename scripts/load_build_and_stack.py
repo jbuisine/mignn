@@ -53,6 +53,7 @@ def main():
         dataset_path = os.path.join(output_dataset, f'{str(uuid.uuid4())}.path')
         PathLightDataset.from_container(build_container, dataset_path, verbose=False)
         del current_container
+        del build_container
 
 if __name__ == "__main__":
     main()
