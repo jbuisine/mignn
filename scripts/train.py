@@ -67,7 +67,7 @@ def main():
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/train/datasets/{model_name}'
-    scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
+    # scaled_dataset_path = f'{output_folder}/train/datasets/{model_name}_scaled'
 
     model_folder = f'{output_folder}/models/{model_name}'
     stats_folder = f'{output_folder}/stats/{model_name}'
@@ -88,8 +88,8 @@ def main():
         os.makedirs(output_temp, exist_ok=True)
         
         # same for scaled datasets
-        output_temp_scaled = f'{output_folder}/train/temp_scaled/'
-        os.makedirs(output_temp_scaled, exist_ok=True)
+        # output_temp_scaled = f'{output_folder}/train/temp_scaled/'
+        # os.makedirs(output_temp_scaled, exist_ok=True)
 
         # multiprocess build of connections
         pool_obj = ThreadPool()
@@ -147,13 +147,13 @@ def main():
             'y': y_scaler
         }
         
-        # transforms_list = [ScalerTransform(scalers)]
+        transforms_list = [ScalerTransform(scalers)]
         
-        # if MIGNNConf.ENCODING is not None:
-        #     print('[Encoded required] scaled data will be encoded')
-        #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+        if MIGNNConf.ENCODING is not None:
+            print('[Encoded required] scaled data will be encoded')
+            transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
-        # applied_transforms = GeoT.Compose(transforms_list)    
+        applied_transforms = GeoT.Compose(transforms_list)    
 
         # applied transformations over all intermediate path light dataset
         # avoid memory overhead
