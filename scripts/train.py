@@ -74,6 +74,10 @@ def main():
     os.makedirs(model_folder, exist_ok=True)
     os.makedirs(stats_folder, exist_ok=True)
     
+    # empty dataset by default
+    train_dataset = None
+    test_dataset = None
+    
     if not os.path.exists(dataset_path):
         gnn_folders, ref_images, _ = prepare_data(scene_file,
                                     max_depth = MIGNNConf.MAX_DEPTH,
