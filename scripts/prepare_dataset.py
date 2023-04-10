@@ -1,6 +1,6 @@
 import os
 import argparse
-import pickle
+import psutil
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -88,7 +88,8 @@ def main():
         params = list(zip(gnn_folders,
                     [ scene_file for _ in range(len(gnn_folders)) ],
                     [ output_temp for _ in range(len(gnn_folders)) ],
-                    ref_images))
+                    ref_images
+                ))
 
         build_containers = []
         for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
@@ -154,6 +155,7 @@ def main():
             n_intermediates = len(intermediate_datasets_path)
             intermediate_scaled_datasets_path = []
             
+            print(f'Memory usage is: {psutil.virtual_memory().percent}%')
             # multiprocess scale of dataset
             pool_obj_scaled = ThreadPool()
 
@@ -166,10 +168,12 @@ def main():
             for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
                 intermediate_scaled_datasets_path.append(result)
                 
+            print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
             intermediate_scaled_datasets = []
             for scaled_dataset_path in intermediate_scaled_datasets_path:
                 intermediate_scaled_datasets.append(PathLightDataset(root=scaled_dataset_path, 
                                                         pre_transform=applied_transforms))
+                print(f'[Merging dataset] memory usage is: {psutil.virtual_memory().percent}%')
                 
             # scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
             # scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, 

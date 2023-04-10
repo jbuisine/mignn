@@ -16,35 +16,42 @@ from mitsuba import ScalarTransform4f as T
 import config as MIGNNConf
 
 
-def chunks_dict(data, size=10000):
+# def chunks_dict(data, size=10000):
     
-    iterator = iter(data)
-    for _ in range(0, len(data), size):
-        yield {k:data[k] for k in islice(iterator, size)}
+#     print(data)
+#     iterator = iter(data)
+#     for _ in range(0, len(data), size):
+#         yield {k:data[k] for k in islice(iterator, size)}
         
 def chunk_file(filename, output_folder, chunk_size):
     
-    extract_key = lambda x: list(map(int, x.split(';')[0].split(',')))
+    extract_key = lambda x: tuple(map(int, x.split(';')[0].split(',')))
     
     with open(filename, 'r', encoding='utf-8') as f_gnn:
         rows = f_gnn.readlines()
         
         keys_and_rows = [ (extract_key(row), row) for row in rows ]
-        res = defaultdict(list)
-        for k, v in keys_and_rows: 
-            res[tuple(k)].append(v)
-            
-        # sorted_rows = sorted(rows, key=extract_key, reverse=False)
+        res = {}
+        for k, row in keys_and_rows: 
+            if k not in res:
+                res[k] = []
+            res[k].append(row)
         
-    # chunk_rows = [list(res.keys())[i: i + n_chunks] for i in range(0, len(res.keys()), n_chunks)]
-    # print(len(chunk_rows))
+    # not need sort keys
+    chunk_rows = [list(res)[i: i + chunk_size] for i in range(0, len(res.keys()), chunk_size)]
     
-    for i, chunk_keys in enumerate(chunks_dict(res, chunk_size)):
-        # print(item)
+    # for i, chunk_keys in enumerate(chunks_dict(sorted(res), chunk_size)):
+    for i, chunk_keys in enumerate(chunk_rows):
+        
     # for i, chunk_keys in enumerate(chunk_rows):
         _, folder_name = os.path.split(output_folder)
         
-        filename = f'{folder_name}_{i}.path'
+        # add specific index
+        i_str = str(i)
+        while len(i_str) < 5: 
+            i_str = f'0{i_str}'
+        
+        filename = f'{folder_name}_{i_str}.path'
         with open(f'{os.path.join(output_folder, filename)}', 'w', encoding='utf-8') as f_output:
             
             # write row for current chunk keys
@@ -91,7 +98,7 @@ def load_sensor_from(img_size, sensor_file):
         },
     })
 
-def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folder):
+def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folder, chunk_enabled=True):
     """Enable to extract GNN data from `pathgnn` integrator and associated reference
     """
     os.makedirs(output_folder, exist_ok=True)
@@ -135,16 +142,21 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
     
             cv2.imwrite(low_image_path, np.asarray(low_image))
         
-            # now split file into multiple ones
+            # now split file into multiple ones (except when predict)
             os.makedirs(gnn_log_folder, exist_ok=True)
-            
-            # need to chunk file by pixels keys
-            chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.VIEWPOINT_CHUNK)
-            
-            # now remove initial log file
-            os.system(f'rm {gnn_log_filename}')
-            
-        print(f'[Generation from images] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
+        
+            if chunk_enabled:
+                
+                # need to chunk file by pixels keys
+                chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.VIEWPOINT_CHUNK)
+                
+                # now remove initial log file
+                os.system(f'rm {gnn_log_filename}')
+            else:
+                # keep only one file when necessary (predictions)
+                os.system(f'mv {gnn_log_filename} {gnn_log_folder}')
+                
+        print(f'[Data generation] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
 
         low_images.append(low_image_path)
         output_gnn_folders.append(gnn_log_folder)

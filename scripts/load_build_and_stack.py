@@ -38,7 +38,7 @@ def main():
 
     os.makedirs(output_dataset, exist_ok=True)
     
-    for gnn_file_name in os.listdir(gnn_folder):
+    for gnn_file_name in sorted(os.listdir(gnn_folder)):
         
         gnn_file_path = os.path.join(gnn_folder, gnn_file_name)
         current_container = SimpleLightGraphContainer.fromfile(gnn_file_path, scene_file, ref_image, verbose=False)
@@ -51,6 +51,7 @@ def main():
 
         # save intermediate dataset path
         dataset_path = os.path.join(output_dataset, f'{str(uuid.uuid4())}.path')
+            
         PathLightDataset.from_container(build_container, dataset_path, verbose=False)
         del current_container
         del build_container
