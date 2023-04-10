@@ -25,6 +25,8 @@ from multiprocessing.pool import ThreadPool
 from skimage.metrics import mean_squared_error as MSE
 from skimage.metrics import structural_similarity as SSIM
 
+from PIL import Image
+
 import torch_geometric.transforms as GeoT
 from transforms import ScalerTransform, SignalEncoder
 
@@ -218,18 +220,26 @@ def main():
         low_ssim_score = SSIM(low_image, ref_image, channel_axis=2, data_range=255)
         low_mse_score = MSE(low_image, ref_image)
 
-        axs[p_i, 0].imshow(low_image)
+        # TODO: display png image instead of EXR (error when displaying)
+        im_gamma_correct = np.clip(np.power(low_image, 2), 0, 1)
+        low_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 0].imshow(low_im_fixed)
         axs[p_i, 0].set_title(f'From: (SSIM: {low_ssim_score:.4f}, MSE: {low_mse_score:.4f})')
         axs[p_i, 0].axis('off')
 
-        axs[p_i, 1].imshow(pred_image)
+        im_gamma_correct = np.clip(np.power(pred_image, 0.45), 0, 1)
+        pred_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 1].imshow(pred_im_fixed)
         axs[p_i, 1].set_title(f'GNN: (SSIM: {gnn_ssim_score:.4f}, MSE: {gnn_mse_score:.4f})')
         axs[p_i, 1].axis('off')
 
-        axs[p_i, 2].imshow(ref_image)
+        im_gamma_correct = np.clip(np.power(ref_image, 0.45), 0, 1)
+        ref_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 2].imshow(ref_im_fixed)
         axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 
+    print(f'[Information] pdf report saved into `{output_folder}`')
     plt.savefig(f'{output_folder}/report.pdf')
 
 if __name__ == "__main__":
