@@ -17,7 +17,7 @@ from joblib import load as skload
 from models.gcn_model import GNNL
 
 from utils import prepare_data
-from utils import load_sensor_from, load_build_and_stack
+from utils import load_sensor_from, load_build_and_stack, scale_subset
 import matplotlib.pyplot as plt
 
 import tqdm
@@ -38,7 +38,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
-    parser.add_argument('--model', type=str, help="where to find saved model", required=True)
+    parser.add_argument('--model', type=str, help="folder where to find saved model", required=True)
     parser.add_argument('--output', type=str, help="output data folder", required=True)
     parser.add_argument('--sensors', type=str, help="specific sensors folder", required=True)
     
@@ -80,7 +80,9 @@ def main():
                             output_folder = f'{output_folder}/generated')
 
     output_temp = f'{output_folder}/datasets/temp/'
+    output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
     os.makedirs(output_temp, exist_ok=True)
+    os.makedirs(output_temp_scaled, exist_ok=True)
 
     # multiprocess build of connections
     pool_obj = ThreadPool()
@@ -91,27 +93,78 @@ def main():
                 [ os.path.join(output_temp, v) for v in viewpoints ],
                 ref_images))
 
+    print('\n[Build connections]')
     build_containers = []
     for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
         build_containers.append(result)
+    
+        
+    # reload scalers and transformations
+    x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
+    edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
+    y_scaler = skload(f'{model_folder}/y_scaler.bin')
+    
+    scalers = {
+        'x_node': x_scaler,
+        'x_edge': edge_scaler,
+        'y': y_scaler
+    }
+    
+    transforms_list = [ScalerTransform(scalers)]
+    
+    if MIGNNConf.ENCODING is not None:
+        print('[Encoded required] scaled data will be encoded...')
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+    else:
+        print('Prepare scaled data...')
+        
+    applied_transforms = GeoT.Compose(transforms_list)   
 
+    # preparing datasets
     datasets_path = []
     for v_i, viewpoint in enumerate(viewpoints):
         
+        print(f'[Prepare and scaled datasets] viewpoint n°{v_i} -- {viewpoint}')
+                
         viewpoint_temp = os.path.join(output_temp, viewpoint)
-        intermediate_datasets = []
-        intermediate_datasets_path = os.listdir(viewpoint_temp)
+        viewpoint_temp_scaled = os.path.join(output_temp_scaled, viewpoint)
+        intermediate_datasets_path = []
+        intermediate_datasets_name = sorted(os.listdir(viewpoint_temp))
         
-        for dataset_name in intermediate_datasets_path:
+        for dataset_name in intermediate_datasets_name:
             c_dataset_path = os.path.join(viewpoint_temp, dataset_name)
-            c_dataset = PathLightDataset(root=c_dataset_path)
-            intermediate_datasets.append(c_dataset)
+            PathLightDataset(root=c_dataset_path)
+            intermediate_datasets_path.append(c_dataset_path)
             
+        n_intermediates = len(intermediate_datasets_path)
+        intermediate_scaled_datasets_path = []
+        
+        # multiprocess scale of dataset
+        pool_obj_scaled = ThreadPool()
+
+        # load in parallel same scene file, imply error. Here we load multiple scenes
+        scaled_params = list(zip(intermediate_datasets_path,
+                    [ model_folder for _ in range(n_intermediates) ],
+                    [ viewpoint_temp_scaled for _ in range(n_intermediates) ]
+                ))
+        
+        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
+            intermediate_scaled_datasets_path.append(result)
+            
+        intermediate_scaled_datasets = []
+        for scaled_dataset_path in intermediate_scaled_datasets_path:
+            intermediate_scaled_datasets.append(PathLightDataset(root=scaled_dataset_path, 
+                                                    pre_transform=applied_transforms))
+            
+        # cleaning
+        os.system(f'rm -r {viewpoint_temp}') 
+        os.system(f'rm -r {viewpoint_temp_scaled}') 
+        
         # use concat dataset
         dataset_path = f'{output_folder}/datasets/{viewpoint}'        
-        concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
-        dataset = PathLightDataset(dataset_path, concat_datasets)
-        print(f' -- [Intermediate save] save computed dataset into: {dataset_path}')
+        scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
+        dataset = PathLightDataset(dataset_path, scaled_concat_datasets)
+        print(f' -- [Saving] scaled data saved into: {dataset_path}')
         datasets_path.append(dataset_path)
 
     print(f'[cleaning] clear intermediated saved containers into {output_temp}')
@@ -131,8 +184,6 @@ def main():
         x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
         edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
         y_scaler = skload(f'{model_folder}/y_scaler.bin')
-
-        scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
         
         scalers = {
             'x_node': x_scaler,
@@ -148,16 +199,8 @@ def main():
 
         applied_transforms = GeoT.Compose(transforms_list) 
         
-        # TODO: check if necessary to apply transformation over this dataset
-        # such as train process
-        if not os.path.exists(scaled_dataset_path):
-
-            # save dataset
-            print(f' -- Save scaled dataset into: {scaled_dataset_path}')
-            PathLightDataset(scaled_dataset_path, dataset, pre_transform=applied_transforms)
-
-        print(f' -- Load scaled dataset from: {scaled_dataset_path}')
-        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=applied_transforms)
+        print(f' -- Load scaled dataset from: {dataset_path}')
+        dataset = PathLightDataset(root=dataset_path, pre_transform=applied_transforms)
 
         model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
         print(' -- Model has been loaded')

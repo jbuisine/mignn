@@ -139,7 +139,7 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
             os.makedirs(gnn_log_folder, exist_ok=True)
             
             # need to chunk file by pixels keys
-            chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.CHUNK_SIZE)
+            chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.VIEWPOINT_CHUNK)
             
             # now remove initial log file
             os.system(f'rm {gnn_log_filename}')
@@ -169,3 +169,19 @@ def load_build_and_stack(params):
     # build_container = dill.load(open(expected_container_path, 'rb'))
 
     return True
+
+
+def scale_subset(params):
+
+    dataset_path, model_path, output_temp_scaled = params
+
+    # [Important] this task cannot be done by multiprocess, need to be done externaly
+    process = subprocess.Popen(["python", "scale_subset.py", \
+        "--dataset", dataset_path, \
+        "--model", model_path, \
+        "--output", output_temp_scaled])
+    process.wait()
+    
+    _, dataset_name = os.path.split(dataset_path)
+
+    return os.path.join(output_temp_scaled, dataset_name)
