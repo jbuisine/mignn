@@ -32,21 +32,21 @@ def main():
     os.makedirs(stats_folder, exist_ok=True)
     
     dataset_path = os.path.join(output_folder, 'train', 'datasets')
-    print(f'Load scaled dataset from: `{dataset_path}.train` and `{dataset_path}.test`')
+    print(f'[Loading] dataset from: `{dataset_path}`')
     train_dataset = PathLightDataset(root=f'{dataset_path}.train')
     test_dataset = PathLightDataset(root=f'{dataset_path}.test')
         
-    print(f'Train dataset: {len(train_dataset)} graphs')
-    print(f'Test dataset: {len(test_dataset)} graphs')
-    print(f'Example of graph from train dataset: {train_dataset[0]}')
+    print(f'[Information] train dataset composed of: {len(train_dataset)} graphs')
+    print(f'[Information] test dataset composed of: {len(test_dataset)} graphs')
+    print(f'[Information] example of graph from train dataset: {train_dataset[0]}')
     train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
 
-    print('Prepare model: ')
+    print('[Information] model architecture:')
     model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=train_dataset.num_node_features).to(device)
     # model.to(device)
     print(model)
-    print(f'Number of params: {sum(p.numel() for p in model.parameters())}')
+    print(f'[Information] model with number of params: {sum(p.numel() for p in model.parameters())}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.MSELoss()
@@ -112,7 +112,7 @@ def main():
 
     stat_file.close()
 
-    print(f'Model has been saved into: `{model_folder}`')
+    print(f'[Saving] best model has been saved into: `{model_folder}`')
 
 if __name__ == "__main__":
     main()

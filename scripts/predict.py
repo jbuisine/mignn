@@ -93,7 +93,7 @@ def main():
                 [ os.path.join(output_temp, v) for v in viewpoints ],
                 ref_images))
 
-    print('\n[Build connections]')
+    print('\n[Building connections] creating connections using Mistuba3')
     build_containers = []
     for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
         build_containers.append(result)
@@ -113,18 +113,17 @@ def main():
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING is not None:
-        print('[Encoded required] scaled data will be encoded...')
+        print('[Scaling (with encoding)] start preparing encoded scaled data...')
         transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
     else:
-        print('Prepare scaled data...')
-        
-    applied_transforms = GeoT.Compose(transforms_list)   
+        print('[Scaling] start preparing scaled data...')
+    applied_transforms = GeoT.Compose(transforms_list)    
 
     # preparing datasets
     datasets_path = []
     for v_i, viewpoint in enumerate(viewpoints):
         
-        print(f'[Prepare and scaled datasets] viewpoint n°{v_i} -- {viewpoint}')
+        print(f' -- [Processing] prepare dataset for viewpoint n°{v_i} -- {viewpoint}')
                 
         viewpoint_temp = os.path.join(output_temp, viewpoint)
         viewpoint_temp_scaled = os.path.join(output_temp_scaled, viewpoint)
@@ -167,9 +166,15 @@ def main():
         print(f' -- [Saving] scaled data saved into: {dataset_path}')
         datasets_path.append(dataset_path)
 
-    print(f'[cleaning] clear intermediated saved containers into {output_temp}')
+    print(f'[Cleaning] clear intermediated saved containers into {output_temp}')
     os.system(f'rm -r {output_temp}')
 
+    model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
+    print('[Information] model has been loaded')
+
+    model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
+    model.eval()
+    
     for v_i, sensor in enumerate(sensors):
 
         dataset_path = datasets_path[v_i]
@@ -177,7 +182,7 @@ def main():
         v_ref_image = np.asarray(cv2.imread(ref_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
         v_low_image = np.asarray(cv2.imread(low_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
 
-        print(f'[Manage viewpoint n°{v_i}: {viewpoint_name}]')
+        print(f'[Prediction] viewpoint n°{v_i}: {viewpoint_name}]')
 
         dataset = PathLightDataset(root=dataset_path)
 
@@ -194,19 +199,12 @@ def main():
         transforms_list = [ScalerTransform(scalers)]
         
         if MIGNNConf.ENCODING is not None:
-            print('[Encoded required] scaled data will be encoded')
             transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
 
         applied_transforms = GeoT.Compose(transforms_list) 
         
         print(f' -- Load scaled dataset from: {dataset_path}')
         dataset = PathLightDataset(root=dataset_path, pre_transform=applied_transforms)
-
-        model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
-        print(' -- Model has been loaded')
-
-        model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
-        model.eval()
 
         pixels = []
 
@@ -271,6 +269,7 @@ def main():
         axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 
+    print(f'[Information] final report saved into {output_folder}/report.pdf')
     plt.savefig(f'{output_folder}/report.pdf')
 
 if __name__ == "__main__":

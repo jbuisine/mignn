@@ -63,6 +63,7 @@ def main():
     os.makedirs(model_folder, exist_ok=True)
     
     if not os.path.exists(dataset_path):
+        print('[Data generation] start generating GNN data using Mistuba3')
         gnn_folders, ref_images, _ = prepare_data(scene_file,
                                     max_depth = MIGNNConf.MAX_DEPTH,
                                     data_spp = MIGNNConf.GNN_SPP,
@@ -79,6 +80,7 @@ def main():
         output_temp_scaled = f'{output_folder}/train/temp_scaled/'
         os.makedirs(output_temp_scaled, exist_ok=True)
 
+        print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
         pool_obj = ThreadPool()
 
@@ -116,8 +118,8 @@ def main():
         train_dataset = concatenated_dataset[:split_index]
         test_dataset = concatenated_dataset[split_index:]
         
-        print(f'Dataset will be composed of {len(concatenated_dataset)} graphs (percent split: {split_percent})')
-        
+        print(f'[Information] dataset will be composed of {len(concatenated_dataset)} graphs (percent split: {split_percent})')
+        print(f'[Processing] fit scalers from {len(train_dataset)} graphs')
         # Later use of pre_transform function of datasets in order to save data
         # normalize data
         x_scaler = MinMaxScaler().fit(train_dataset.data.x)
@@ -137,10 +139,10 @@ def main():
         transforms_list = [ScalerTransform(scalers)]
         
         if MIGNNConf.ENCODING is not None:
-            print('[Encoded required] scaled data will be encoded...')
+            print('[Scaling (with encoding)] start preparing encoded scaled data...')
             transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
         else:
-            print('Prepare scaled data...')
+            print('[Scaling] start preparing scaled data...')
         applied_transforms = GeoT.Compose(transforms_list)    
 
         # applied transformations over all intermediate path light dataset
@@ -215,17 +217,17 @@ def main():
             test_dataset = scaled_concatenated_dataset[split_index:]
         
             # save scaled dataset
-            print(f'Save train and test dataset into: {dataset_path}')
+            print(f'[Saving] train and test datasets will be saved into: {dataset_path}')
             PathLightDataset(f'{dataset_path}.train', 
                             train_dataset)
             PathLightDataset(f'{dataset_path}.test', 
                             test_dataset)
         
-            print('[cleaning] clear intermediates saved datasets...')
+            print('[Cleaning] clear intermediates saved datasets...')
 
             os.system(f'rm -r {scaled_dataset_path}') # remove also previous computed dataset
-        else:
-            print(f'{scaled_dataset_path} already exists')
+    else:
+        print(f'[Information] {dataset_path} already generated')
  
 if __name__ == "__main__":
     main()
