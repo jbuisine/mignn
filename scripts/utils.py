@@ -2,7 +2,7 @@
 """
 import os
 import numpy as np
-import torch
+import sys
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
@@ -14,16 +14,8 @@ import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
 
 import config as MIGNNConf
-
-
-# def chunks_dict(data, size=10000):
-    
-#     print(data)
-#     iterator = iter(data)
-#     for _ in range(0, len(data), size):
-#         yield {k:data[k] for k in islice(iterator, size)}
-        
-def chunk_file(filename, output_folder, chunk_size):
+      
+def chunk_file(filename, output_folder, chunk_memory_size):
     
     extract_key = lambda x: tuple(map(int, x.split(';')[0].split(',')))
     
@@ -38,12 +30,39 @@ def chunk_file(filename, output_folder, chunk_size):
             res[k].append(row)
         
     # not need sort keys
-    chunk_rows = [list(res)[i: i + chunk_size] for i in range(0, len(res.keys()), chunk_size)]
+    # chunk_rows = [list(res)[i: i + chunk_size] for i in range(0, len(res.keys()), chunk_size)]
+    
+    # manage chunk using memory in Mo
+    chunk_in_bytes = chunk_memory_size * (1024 ** 2)
+    chunk_rows = []
+    
+    current_chunk = []
+    memory_sum = 0
+    
+    for key, rows in res.items():
+        
+        c_memory_bytes = sum(sys.getsizeof(line) for line in rows)
+        memory_sum += c_memory_bytes
+        
+        if c_memory_bytes > chunk_in_bytes:
+            raise ValueError(f'Cannot save information using only {chunk_memory_size} Mo \
+                when generating GNN files')
+            
+        # create new chunk
+        if memory_sum > chunk_in_bytes:
+            chunk_rows.append(current_chunk)
+            memory_sum = 0
+            current_chunk = []
+            
+        current_chunk.append(key)
+        
+    # last save if needed
+    if len(current_chunk) > 0:
+        chunk_rows.append(current_chunk)
     
     # for i, chunk_keys in enumerate(chunks_dict(sorted(res), chunk_size)):
     for i, chunk_keys in enumerate(chunk_rows):
         
-    # for i, chunk_keys in enumerate(chunk_rows):
         _, folder_name = os.path.split(output_folder)
         
         # add specific index
@@ -185,12 +204,12 @@ def load_build_and_stack(params):
 
 def scale_subset(params):
 
-    dataset_path, model_path, output_temp_scaled = params
+    dataset_path, scalers_path, output_temp_scaled = params
 
     # [Important] this task cannot be done by multiprocess, need to be done externaly
     process = subprocess.Popen(["python", "scale_subset.py", \
         "--dataset", dataset_path, \
-        "--model", model_path, \
+        "--scalers", scalers_path, \
         "--output", output_temp_scaled])
     process.wait()
     

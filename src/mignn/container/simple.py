@@ -45,13 +45,17 @@ class SimpleLightGraphContainer(LightGraphContainer):
 
                     # try now to create connection
                     for node in selected_nodes:
-
+                        
                         # select randomly one neighbor graph
                         selected_graph = random.choice(neighbors_graphs)
 
                         # randomly select current neighbor graph node for the connection
                         neighbor_selected_node = random.choice(selected_graph.nodes)
 
+                        # do not continue the selected nodes are primary rays or origin
+                        if node.primary and neighbor_selected_node.primary:
+                            continue
+                        
                         # create Ray from current node
                         origin, point = mi.Vector3f(node.position), mi.Vector3f(neighbor_selected_node.position)
 
@@ -108,7 +112,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
         graph = LightGraph(position, target_luminance)
 
         # default origin node
-        prev_node = RayNode(position, normal)
+        prev_node = RayNode(position, normal, primary=True)
 
         graph.add_node(prev_node)
 
@@ -117,7 +121,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
         
         # cannot build connection (only one Node)
         # There is no graph
-        for _, node in enumerate(data):
+        for n_i, node in enumerate(data):
             node_data = node.split('::')
 
             distance = float(node_data[0])
@@ -126,7 +130,12 @@ class SimpleLightGraphContainer(LightGraphContainer):
             position = list(map(float, node_data[3].split(',')))
             normal = list(map(float, node_data[4].split(',')))
 
-            node = RayNode(position, normal)
+            # set RayNode as primary
+            if n_i == 0:
+                node = RayNode(position, normal, primary=True)
+            else:
+                node = RayNode(position, normal)
+                
             graph.add_node(node)
             
             # build connection (unilateral)

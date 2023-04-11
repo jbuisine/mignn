@@ -4,10 +4,12 @@ from torch_geometric.data import InMemoryDataset, Data
 from mignn.container import SimpleLightGraphContainer
 
 class PathLightDataset(InMemoryDataset):
-    def __init__(self, root, data_list=None, transform=None, pre_transform=None):
+    def __init__(self, root, data_list=None, transform=None, pre_transform=None, load=True):
         self.data_list = data_list
         super().__init__(root, transform, pre_transform, log=False)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+        
+        if load:
+            self.data, self.slices = torch.load(self.processed_paths[0])
     
     @property
     def raw_file_names(self):
@@ -33,10 +35,17 @@ class PathLightDataset(InMemoryDataset):
             
         else:
             torch.save(self.collate(self.data_list), self.processed_paths[0])
-                 
+        
+    @property         
+    def num_target_features(self):
+        if self.data is not None:
+            return self.data.y.size()[-1]
+
+        return None
+    
     @staticmethod
     def from_container(container: SimpleLightGraphContainer, output_path: str, \
-        verbose: bool=True):
+        load: bool=True, verbose: bool=True):
         
         # prepare Dataset    
         data_list = []
@@ -66,5 +75,5 @@ class PathLightDataset(InMemoryDataset):
                 print(f'[Prepare torch data] progress: {(idx + 1) / n_keys * 100.:.0f}%', end='\r')
         
         # save dataset
-        return PathLightDataset(output_path, data_list)
+        return PathLightDataset(output_path, data_list, load=load)
 

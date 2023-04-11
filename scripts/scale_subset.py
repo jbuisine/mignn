@@ -18,13 +18,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Simple script only use for scaling subsets in parallel")
     parser.add_argument('--dataset', type=str, help="gnn file data", required=True)
-    parser.add_argument('--model', type=str, help="where model will be saved", required=True)
+    parser.add_argument('--scalers', type=str, help="where scalers are saved", required=True)
     parser.add_argument('--output', type=str, help="output scaled subset folder", required=True)
 
     args = parser.parse_args()
 
     dataset_path     = args.dataset
-    model_folder     = args.model
+    scalers_folder   = args.scalers
     output_folder    = args.output
     
     
@@ -34,9 +34,9 @@ def main():
     c_scaled_dataset_path = os.path.join(output_folder, dataset_name)
 
     # create transforms from MIGNNConf
-    x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
-    edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{model_folder}/y_scaler.bin')
+    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
+    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
+    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
 
     scalers = {
         'x_node': x_scaler,

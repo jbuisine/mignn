@@ -117,7 +117,7 @@ class LightGraphManager():
             final_graph.add_graph(key, current_graph)
 
             if verbose and (idx % step == 0 or idx >= n_elements - 1):
-                print(f'[Stack] -- progress: {(idx + 1) / n_elements * 100.:.2f}%', \
+                print(f'[Stack] -- progress: {(idx + 1) / n_elements * 100.:.0f}%', \
                         end='\r' if idx + 1 < n_elements else '\n')
 
         return final_graph

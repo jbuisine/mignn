@@ -52,7 +52,7 @@ def main():
     sensors_folder    = args.sensors
     
     # MIGNN param
-    w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
+    w_size, h_size    = MIGNNConf.PRED_VIEWPOINT_SIZE
     
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
@@ -114,7 +114,7 @@ def main():
         # use concat dataset
         dataset_path = f'{output_folder}/datasets/{viewpoint}'        
         concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
-        dataset = PathLightDataset(dataset_path, concat_datasets)
+        dataset = PathLightDataset(dataset_path, concat_datasets, load=False)
         print(f' -- [Intermediate save] save computed dataset into: {dataset_path}')
         datasets_path.append(dataset_path)
 
@@ -132,9 +132,9 @@ def main():
 
         dataset = PathLightDataset(root=dataset_path)
 
-        x_scaler = skload(f'{model_folder}/x_node_scaler.bin')
-        edge_scaler = skload(f'{model_folder}/x_edge_scaler.bin')
-        y_scaler = skload(f'{model_folder}/y_scaler.bin')
+        x_scaler = skload(f'{model_folder}/scalers/x_node_scaler.bin')
+        edge_scaler = skload(f'{model_folder}/scalers/x_edge_scaler.bin')
+        y_scaler = skload(f'{model_folder}/scalers/y_scaler.bin')
 
         scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
         
@@ -221,21 +221,21 @@ def main():
         low_mse_score = MSE(low_image, ref_image)
 
         # TODO: display png image instead of EXR (error when displaying)
-        im_gamma_correct = np.clip(np.power(low_image, 2), 0, 1)
-        low_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 0].imshow(low_im_fixed)
+        #im_gamma_correct = np.clip(np.power(low_image, 2), 0, 1)
+        #low_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 0].imshow(low_image)
         axs[p_i, 0].set_title(f'From: (SSIM: {low_ssim_score:.4f}, MSE: {low_mse_score:.4f})')
         axs[p_i, 0].axis('off')
 
-        im_gamma_correct = np.clip(np.power(pred_image, 0.45), 0, 1)
-        pred_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 1].imshow(pred_im_fixed)
+        #im_gamma_correct = np.clip(np.power(pred_image, 0.45), 0, 1)
+        #pred_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 1].imshow(pred_image)
         axs[p_i, 1].set_title(f'GNN: (SSIM: {gnn_ssim_score:.4f}, MSE: {gnn_mse_score:.4f})')
         axs[p_i, 1].axis('off')
 
-        im_gamma_correct = np.clip(np.power(ref_image, 0.45), 0, 1)
-        ref_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 2].imshow(ref_im_fixed)
+        #im_gamma_correct = np.clip(np.power(ref_image, 0.45), 0, 1)
+        #ref_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 2].imshow(ref_image)
         axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 

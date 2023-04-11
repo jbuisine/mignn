@@ -97,7 +97,7 @@ class GraphContainer(ABC):
             self._build_pos_connections(scene, key, n_graphs, n_nodes_per_graphs, n_neighbors)
             
             if verbose and (idx % step == 0 or idx >= n_elements - 1):
-                print(f'[Connections build] -- progress: {(idx + 1) / len(self.keys()) * 100.:.2f}%', \
+                print(f'[Connections build] -- progress: {(idx + 1) / len(self.keys()) * 100.:.0f}%', \
                     end='\r' if idx + 1 < len(self.keys()) else '\n')
             
     
@@ -136,7 +136,7 @@ class GraphContainer(ABC):
                 self.add_graph(pos, graph)
 
                 if verbose and (idx % step == 0 or idx >= n_lines - 1):
-                    print(f'[Load of `{filename}`] -- progress: {(idx + 1) / n_lines * 100.:.2f}%', \
+                    print(f'[Load of `{filename}`] -- progress: {(idx + 1) / n_lines * 100.:.0f}%', \
                           end='\r' if idx + 1 < n_lines else '\n')
     
     def __str__(self) -> str:

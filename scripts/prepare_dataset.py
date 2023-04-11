@@ -1,6 +1,10 @@
 import os
+import uuid
 import argparse
 import psutil
+import numpy as np
+import math
+import json
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -8,11 +12,11 @@ mi.set_variant("scalar_rgb")
 
 from mignn.dataset import PathLightDataset
 
-import torch
 import torch_geometric.transforms as GeoT
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 from joblib import dump as skdump
+from joblib import load as skload
 
 import tqdm
 from multiprocessing.pool import ThreadPool
@@ -23,6 +27,94 @@ from utils import load_sensor_from, load_build_and_stack, scale_subset
 from transforms import ScalerTransform, SignalEncoder
 
 import config as MIGNNConf
+
+
+def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
+    
+    memory_sum = 0
+    memory_size_in_bytes = MIGNNConf.DATASET_CHUNK * (1024 ** 2)
+    
+    print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
+    
+    data_list = []
+    
+    n_subsets = len(scaled_datasets_path)
+    step = (n_subsets // 100) + 1
+    
+    # also store metadata file
+    n_batchs = 0
+    n_samples = 0
+    n_node_features = None
+    n_target_features = None
+    
+    for idx, scaled_dataset_path in enumerate(scaled_datasets_path):
+        
+        c_scaled_dataset = PathLightDataset(root=scaled_dataset_path, 
+                                        pre_transform=applied_transforms)
+        
+        n_current_samples = len(c_scaled_dataset)
+        
+        if n_node_features is None:
+            n_node_features = c_scaled_dataset.num_node_features
+            n_target_features = c_scaled_dataset.num_target_features
+        
+        for c_data_i in range(n_current_samples):
+            data = c_scaled_dataset[c_data_i]
+            
+            # get current data memory size
+            memory_object = sum([v.element_size() * v.numel() for k, v in data])
+            memory_sum += memory_object
+                    
+            # need to store into intermediate dataset
+            # if limited memory is greater than fixed or end of train dataset size
+            if memory_sum > memory_size_in_bytes:
+        
+                n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
+                
+                print(f'[During merging] memory usage is: {psutil.virtual_memory().percent}%')
+        
+                # get the expected dataset folder
+                c_dataset_path = os.path.join(output_path, f'{str(uuid.uuid4())}.path')
+                
+                # save intermediate dataset with expected max size
+                PathLightDataset(c_dataset_path, data_list, load=False)
+                
+                # reset data list
+                data_list = []
+                
+                # reset memory sum
+                memory_sum = 0
+                
+                
+            data_list.append(data)
+            n_samples += 1
+                        
+        # clear memory
+        del c_scaled_dataset
+        
+        if (idx % step == 0 or idx >= n_subsets - 1):
+            print(f'[Prepare dataset (chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
+                end='\r' if idx + 1 < n_subsets else '\n')
+        
+    # do last save if needed    
+    if len(data_list) > 0:
+        n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
+                
+        c_dataset_path = os.path.join(output_path, f'{str(uuid.uuid4())}.path')
+        # save intermediate dataset with expected max size
+        PathLightDataset(c_dataset_path, data_list, load=False)
+        
+    # save training metadata
+    metadata = { 
+        'n_samples': n_samples, 
+        'n_batchs': n_batchs,
+        'n_node_features': n_node_features,
+        'n_target_features': n_target_features,
+    }
+    
+    with open(f'{output_path}/metadata', 'w', encoding='utf-8') as outfile:
+        json.dump(metadata, outfile)
+
 
 def main():
 
@@ -57,9 +149,9 @@ def main():
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/train/datasets'
-    scaled_dataset_path = f'{output_folder}/train/datasets_scaled'
 
     model_folder = f'{output_folder}/model'
+    scalers_folder = f'{output_folder}/model/scalers'
     os.makedirs(model_folder, exist_ok=True)
     
     # multiple datasets to avoid memory overhead
@@ -70,7 +162,7 @@ def main():
     output_temp_scaled = f'{output_folder}/train/temp_scaled/'
     os.makedirs(output_temp_scaled, exist_ok=True)
 
-    if not os.path.exists(dataset_path):
+    if not os.path.exists(scalers_folder):
         print('[Data generation] start generating GNN data using Mistuba3')
         gnn_folders, ref_images, _ = prepare_data(scene_file,
                                     max_depth = MIGNNConf.MAX_DEPTH,
@@ -96,43 +188,84 @@ def main():
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
-        intermediate_datasets = []
         # ensure file orders
         intermediate_datasets_path = sorted(os.listdir(output_temp))
         
-        for dataset_name in intermediate_datasets_path:
-            c_dataset_path = os.path.join(output_temp, dataset_name)
-            c_dataset = PathLightDataset(root=c_dataset_path)
-            intermediate_datasets.append(c_dataset)
-            
-        concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
-        concatenated_dataset = PathLightDataset(dataset_path, concat_datasets)
-        print(f'[Intermediate save] save computed dataset into: {dataset_path}')
-
-    else:
-        concatenated_dataset = PathLightDataset(dataset_path)
-        print(f'[Reload] computed dataset into: {dataset_path}')
+        x_scaler = MinMaxScaler()
+        edge_scaler = MinMaxScaler()
+        y_scaler = MinMaxScaler()
+    
+        print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
         
-    # merged_graph_container = LightGraphManager.fusion(build_containers)
-    # print('[merged]', merged_graph_container)
+        # prepare splitting of train and test dataset
+        output_temp_train = f'{output_folder}/train/temp/train'
+        os.makedirs(output_temp_train, exist_ok=True)
+        
+        output_temp_test = f'{output_folder}/train/temp/test'
+        os.makedirs(output_temp_test, exist_ok=True)
     
-    # prepare splitted dataset
-    split_index = int(len(concatenated_dataset) * split_percent)
-    train_dataset = concatenated_dataset[:split_index]
-    test_dataset = concatenated_dataset[split_index:]
-    
-    print(f'[Information] dataset will be composed of {len(concatenated_dataset)} graphs (percent split: {split_percent})')
-    print(f'[Processing] fit scalers from {len(train_dataset)} graphs')
-    # Later use of pre_transform function of datasets in order to save data
-    # normalize data
-    x_scaler = MinMaxScaler().fit(train_dataset.data.x)
-    edge_scaler = MinMaxScaler().fit(train_dataset.data.edge_attr)
-    y_scaler = MinMaxScaler().fit(train_dataset.data.y.reshape(-1, 3))
+        # compute scalers using partial fit and respecting train dataset
+        n_graphs = 0
+        n_train_graphs = 0
+        
+        for dataset_name in intermediate_datasets_path:
+            
+            c_dataset_path = os.path.join(output_temp, dataset_name)
+            subset = PathLightDataset(root=c_dataset_path)
+            
+            # record data
+            n_elements = len(subset)
+            n_graphs += n_elements
+            
+            # split data into training and testing set
+            split_index = int(n_elements * split_percent)
+            n_train_graphs += split_index
+            
+            # create train and test datasets
+            temp_train_path = os.path.join(output_temp_train, dataset_name)
+            temp_test_path = os.path.join(output_temp_test, dataset_name)
+                    
+            # shuffle data
+            indices = np.arange(split_index)
+            np.random.shuffle(indices)
+            train_indices = indices[:split_index]
+            
+            train_data = []
+            test_data = []
+            
+            # fill data
+            for i in range(n_elements):
+                if i in train_indices:
+                    train_data.append(subset[i]) 
+                else: 
+                    test_data.append(subset[i])
+                    
+            # save intermediate dataset
+            intermediate_train_dataset = PathLightDataset(temp_train_path, train_data)
+            # only save
+            PathLightDataset(temp_test_path, test_data) 
+            
+            # partial fit on test set
+            x_scaler.partial_fit(intermediate_train_dataset.data.x)
+            edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
+            y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+            
+        
+        print(f'[Information] dataset is composed of {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs})')    
+        
+        # save scalers
+        os.makedirs(scalers_folder, exist_ok=True)
+        
+        skdump(x_scaler, f'{scalers_folder}/x_node_scaler.bin', compress=True)
+        skdump(edge_scaler, f'{scalers_folder}/x_edge_scaler.bin', compress=True)
+        skdump(y_scaler, f'{scalers_folder}/y_scaler.bin', compress=True)
 
-    skdump(x_scaler, f'{model_folder}/x_node_scaler.bin', compress=True)
-    skdump(edge_scaler, f'{model_folder}/x_edge_scaler.bin', compress=True)
-    skdump(y_scaler, f'{model_folder}/y_scaler.bin', compress=True)
 
+    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
+    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
+    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
+        
+    # reload scalers    
     scalers = {
         'x_node': x_scaler,
         'x_edge': edge_scaler,
@@ -150,88 +283,62 @@ def main():
 
     # applied transformations over all intermediate path light dataset
     # avoid memory overhead
-    if not os.path.exists(f'{scaled_dataset_path}.train'):
+    if not os.path.exists(f'{dataset_path}_train'):
         
-        # Potential NEW VERSION (does not well parallelized)
-        intermediate_datasets_path = [ os.path.join(output_temp, p) for p in sorted(os.listdir(output_temp)) ]
+        output_scaled_temp_train = f'{output_folder}/train/temp_scaled/train'
+        os.makedirs(output_scaled_temp_train, exist_ok=True)
+        
+        output_scaled_temp_test = f'{output_folder}/train/temp_scaled/test'
+        os.makedirs(output_scaled_temp_test, exist_ok=True)
+        
+        # concat train and test intermediate datasets with expected output
+        intermediate_datasets_path = [ (output_scaled_temp_train, os.path.join(output_temp_train, p)) \
+                                    for p in sorted(os.listdir(output_temp_train)) ]
+        intermediate_datasets_path += [ (output_scaled_temp_test, os.path.join(output_temp_test, p)) \
+                                    for p in sorted(os.listdir(output_temp_test)) ]
+        
+        # separate expected output and where to intermediate dataset path
+        output_scaled, datasets_path = list(zip(*intermediate_datasets_path))
+        
         n_intermediates = len(intermediate_datasets_path)
         intermediate_scaled_datasets_path = []
         
-        print(f'Memory usage is: {psutil.virtual_memory().percent}%')
-        # multiprocess scale of dataset
+        print(f'[Before intermediate] memory usage is: {psutil.virtual_memory().percent}%')
+        
+        # multi-process scale of dataset
         pool_obj_scaled = ThreadPool()
-
+    
         # load in parallel same scene file, imply error. Here we load multiple scenes
-        scaled_params = list(zip(intermediate_datasets_path,
-                    [ model_folder for _ in range(n_intermediates) ],
-                    [ output_temp_scaled for _ in range(n_intermediates) ]
+        scaled_params = list(zip(datasets_path,
+                    [ scalers_folder for _ in range(n_intermediates) ],
+                    output_scaled
                 ))
         
         for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
             intermediate_scaled_datasets_path.append(result)
             
+        # create output train and test folders
+        train_dataset_path = f'{dataset_path}_train'
+        test_dataset_path = f'{dataset_path}_test'
+        os.makedirs(train_dataset_path, exist_ok=True)
+        os.makedirs(test_dataset_path, exist_ok=True)
+        
         print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
-        intermediate_scaled_datasets = []
-        for scaled_dataset_path in intermediate_scaled_datasets_path:
-            intermediate_scaled_datasets.append(PathLightDataset(root=scaled_dataset_path, 
-                                                    pre_transform=applied_transforms))
-            print(f'[Merging dataset] memory usage is: {psutil.virtual_memory().percent}%')
-            
-        # scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
-        # scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, 
-        #                                         scaled_concat_datasets)
         
-        # Current VERSION
-        # intermediate_scaled_datasets_path = []
-        # intermediate_datasets_path = sorted(os.listdir(output_temp))
+        # call merge by chunk for each scaled train and test subsets
+        scaled_train_subsets = [ os.path.join(output_scaled_temp_train, p) \
+                    for p in sorted(os.listdir(output_scaled_temp_train)) ]
+        scaled_test_subsets = [ os.path.join(output_scaled_temp_test, p) \
+            for p in sorted(os.listdir(output_scaled_temp_test)) ]
         
-        # n_subsets = len(intermediate_datasets_path)
-        # step = (n_subsets // 100) + 1
-        
-        # for idx, dataset_name in enumerate(intermediate_datasets_path):
-        #     c_dataset_path = os.path.join(output_temp, dataset_name)
-        #     c_dataset = PathLightDataset(root=c_dataset_path)
-            
-        #     c_scaled_dataset_path = os.path.join(output_temp_scaled, dataset_name)
-
-        #     scaled_dataset = PathLightDataset(c_scaled_dataset_path, c_dataset, 
-        #                         pre_transform=applied_transforms)
-            
-        #     if (idx % step == 0 or idx >= n_subsets - 1):
-        #         print(f'[Scaling] -- progress: {(idx + 1) / n_subsets * 100.:.2f}%', \
-        #             end='\r' if idx + 1 < n_subsets else '\n')
-            
-            # now transform dataset using scaler and encoding
-            # intermediate_scaled_datasets_path.append(c_scaled_dataset_path)
-            # del c_dataset # remove intermediate variable
-            # del scaled_dataset
-            
-        # TODO: create TRAIN and TEST subsets
-        # reload each scaled datasets
-        # intermediate_scaled_datasets = []
-        # for scaled_dataset_path in intermediate_scaled_datasets_path:
-        #     intermediate_scaled_datasets.append(PathLightDataset(root=scaled_dataset_path, pre_transform=applied_transforms))
-
-        # why need to remove before creating other dataset?
+        # merged data into expected chunk size
+        merge_by_chunk(scaled_train_subsets, train_dataset_path, applied_transforms)
+        merge_by_chunk(scaled_test_subsets, test_dataset_path, applied_transforms)
+                 
+        print(f'[After merging] memory usage is: {psutil.virtual_memory().percent}%')
+        print('[Cleaning] clear intermediates saved datasets...')
         os.system(f'rm -r {output_temp}') 
         os.system(f'rm -r {output_temp_scaled}') 
-        
-        scaled_concat_datasets = torch.utils.data.ConcatDataset(intermediate_scaled_datasets)
-        scaled_concatenated_dataset = PathLightDataset(scaled_dataset_path, scaled_concat_datasets)
-        
-        train_dataset = scaled_concatenated_dataset[:split_index]
-        test_dataset = scaled_concatenated_dataset[split_index:]
-    
-        # save scaled dataset
-        print(f'[Saving] train and test datasets will be saved into: {dataset_path}')
-        PathLightDataset(f'{dataset_path}.train', 
-                        train_dataset)
-        PathLightDataset(f'{dataset_path}.test', 
-                        test_dataset)
-    
-        print('[Cleaning] clear intermediates saved datasets...')
-
-        os.system(f'rm -r {scaled_dataset_path}') # remove also previous computed dataset
     else:
         print(f'[Information] {dataset_path} already generated')
  
