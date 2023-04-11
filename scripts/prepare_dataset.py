@@ -62,6 +62,14 @@ def main():
     model_folder = f'{output_folder}/model'
     os.makedirs(model_folder, exist_ok=True)
     
+    # multiple datasets to avoid memory overhead
+    output_temp = f'{output_folder}/train/temp/'
+    os.makedirs(output_temp, exist_ok=True)
+    
+    # same for scaled datasets
+    output_temp_scaled = f'{output_folder}/train/temp_scaled/'
+    os.makedirs(output_temp_scaled, exist_ok=True)
+
     if not os.path.exists(dataset_path):
         print('[Data generation] start generating GNN data using Mistuba3')
         gnn_folders, ref_images, _ = prepare_data(scene_file,
@@ -70,15 +78,6 @@ def main():
                                     ref_spp = MIGNNConf.REF_SPP,
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/train/generated')
-
-
-        # multiple datasets to avoid memory overhead
-        output_temp = f'{output_folder}/train/temp/'
-        os.makedirs(output_temp, exist_ok=True)
-        
-        # same for scaled datasets
-        output_temp_scaled = f'{output_folder}/train/temp_scaled/'
-        os.makedirs(output_temp_scaled, exist_ok=True)
 
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
