@@ -30,7 +30,7 @@ from transforms import ScalerTransform, SignalEncoder
 import config as MIGNNConf
 
 
-def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
+def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_transforms):
     
     memory_sum = 0
     memory_size_in_bytes = MIGNNConf.DATASET_CHUNK * (1024 ** 2)
@@ -90,7 +90,7 @@ def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
         del c_scaled_dataset
         
         if (idx % step == 0 or idx >= n_subsets - 1):
-            print(f'[Prepare dataset (chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
+            print(f'[Prepare {output_name} dataset (with chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
                 end='\r' if idx + 1 < n_subsets else '\n')
         
     # do last save if needed    
@@ -333,10 +333,8 @@ def main():
             for p in sorted(os.listdir(output_scaled_temp_test)) ]
         
         # merged data into expected chunk size
-        print('[Merge] begin merge of train dataset')
-        merge_by_chunk(scaled_train_subsets, train_dataset_path, applied_transforms)
-        print('[Merge] begin merge of test dataset')
-        merge_by_chunk(scaled_test_subsets, test_dataset_path, applied_transforms)
+        merge_by_chunk('train', scaled_train_subsets, train_dataset_path, applied_transforms)
+        merge_by_chunk('test', scaled_test_subsets, test_dataset_path, applied_transforms)
                  
         print('[Cleaning] clear intermediates saved datasets...')
         os.system(f'rm -r {output_temp}') 

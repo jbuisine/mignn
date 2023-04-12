@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+from itertools import chain
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -74,7 +75,7 @@ def main():
     references = []
     low_res_images = []
 
-    gnn_files, ref_images, low_images = prepare_data(scene_file,
+    gnn_folders, ref_images, low_images = prepare_data(scene_file,
                             max_depth = MIGNNConf.MAX_DEPTH,
                             data_spp = MIGNNConf.GNN_SPP,
                             ref_spp = MIGNNConf.REF_SPP,
@@ -85,15 +86,30 @@ def main():
     output_temp = f'{output_folder}/datasets/temp/'
     os.makedirs(output_temp, exist_ok=True)
 
+    print(gnn_folders)
+    # TODO: manage for each viewpoint (need to attach the correct viewpoint)
+    gnn_data = list(chain.from_iterable([ 
+                    [ 
+                        (
+                            os.path.join(folder, g_file), 
+                            os.path.join(output_temp, viewpoints[f_i]),
+                            ref_images[f_i]
+                        )
+                        for g_file in os.listdir(folder) 
+                    ] 
+                    for f_i, folder in enumerate(gnn_folders)
+                ]))
+    
+    gnn_files_paths, output_temp_paths, gnn_ref_images = list(zip(*gnn_data))
     print('\n[Building connections] creating connections using Mistuba3')
     # multiprocess build of connections
     pool_obj = ThreadPool()
 
     # load in parallel same scene file, imply error. Here we load multiple scenes
-    params = list(zip(gnn_files,
-                [ scene_file for _ in range(len(gnn_files)) ],
-                [ os.path.join(output_temp, v) for v in viewpoints ],
-                ref_images))
+    params = list(zip(gnn_files_paths,
+                [ scene_file for _ in range(len(gnn_files_paths)) ],
+                output_temp_paths,
+                gnn_ref_images))
 
     build_containers = []
     for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
