@@ -46,8 +46,6 @@ def main():
     train_info = json.load(open(f'{dataset_path}_train/metadata', 'r', encoding='utf-8'))
     test_info = json.load(open(f'{dataset_path}_test/metadata', 'r', encoding='utf-8'))
     
-    print(train_info)
-    
     train_n_batchs = int(train_info['n_batchs'])
     test_n_batchs = int(test_info['n_batchs'])
     

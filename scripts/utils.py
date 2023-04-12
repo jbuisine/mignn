@@ -32,6 +32,7 @@ def chunk_file(filename, output_folder, chunk_memory_size):
     # not need sort keys
     # chunk_rows = [list(res)[i: i + chunk_size] for i in range(0, len(res.keys()), chunk_size)]
     
+    # TODO: if necessary to do conv, it is there
     # manage chunk using memory in Mo
     chunk_in_bytes = chunk_memory_size * (1024 ** 2)
     chunk_rows = []
@@ -185,13 +186,13 @@ def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folde
 
 def load_build_and_stack(params):
 
-    gnn_folder, scene_file, output_temp, ref_image_path = params
+    gnn_file, scene_file, output_temp, ref_image_path = params
 
     # [Important] this task cannot be done by multiprocess, need to be done externaly
     # Mitsuba seems to be concurrent package inside same context program
 
     process = subprocess.Popen(["python", "load_build_and_stack.py", \
-        "--gnn_folder", gnn_folder, \
+        "--gnn_file", gnn_file, \
         "--scene", scene_file, \
         "--reference", ref_image_path, \
         "--output", output_temp])

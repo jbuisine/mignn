@@ -5,6 +5,7 @@ import psutil
 import numpy as np
 import math
 import json
+from itertools import chain
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
@@ -33,8 +34,6 @@ def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
     
     memory_sum = 0
     memory_size_in_bytes = MIGNNConf.DATASET_CHUNK * (1024 ** 2)
-    
-    print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
     
     data_list = []
     
@@ -71,8 +70,6 @@ def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
         
                 n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
                 
-                print(f'[During merging] memory usage is: {psutil.virtual_memory().percent}%')
-        
                 # get the expected dataset folder
                 c_dataset_path = os.path.join(output_path, f'{str(uuid.uuid4())}.path')
                 
@@ -171,14 +168,18 @@ def main():
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/train/generated')
 
+        gnn_files = list(chain.from_iterable([ 
+                                    [ os.path.join(f, g_file) for g_file in os.listdir(f) ] 
+                                    for f in gnn_folders 
+                                ]))
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
         pool_obj = ThreadPool()
 
         # load in parallel same scene file, imply error. Here we load multiple scenes
-        params = list(zip(gnn_folders,
-                    [ scene_file for _ in range(len(gnn_folders)) ],
-                    [ output_temp for _ in range(len(gnn_folders)) ],
+        params = list(zip(gnn_files,
+                    [ scene_file for _ in range(len(gnn_files)) ],
+                    [ output_temp for _ in range(len(gnn_files)) ],
                     ref_images
                 ))
 
@@ -323,7 +324,7 @@ def main():
         os.makedirs(train_dataset_path, exist_ok=True)
         os.makedirs(test_dataset_path, exist_ok=True)
         
-        print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
+        # print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
         
         # call merge by chunk for each scaled train and test subsets
         scaled_train_subsets = [ os.path.join(output_scaled_temp_train, p) \
@@ -332,10 +333,11 @@ def main():
             for p in sorted(os.listdir(output_scaled_temp_test)) ]
         
         # merged data into expected chunk size
+        print('[Merge] begin merge of train dataset')
         merge_by_chunk(scaled_train_subsets, train_dataset_path, applied_transforms)
+        print('[Merge] begin merge of test dataset')
         merge_by_chunk(scaled_test_subsets, test_dataset_path, applied_transforms)
                  
-        print(f'[After merging] memory usage is: {psutil.virtual_memory().percent}%')
         print('[Cleaning] clear intermediates saved datasets...')
         os.system(f'rm -r {output_temp}') 
         os.system(f'rm -r {output_temp_scaled}') 
