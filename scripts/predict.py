@@ -131,8 +131,6 @@ def main():
             for v_name in viewpoints
         ]))
     
-    print(scaled_params)
-
     # multi-process scale of dataset
     pool_obj_scaled = ThreadPool()
 
@@ -203,7 +201,6 @@ def main():
         n_predict = 0
         n_predictions = int(dataset_info["n_samples"])
         for c_dataset_path in viewpoint_dataset_paths:
-            print(c_dataset_path)
 
             dataset = PathLightDataset(root=c_dataset_path)
             dataset_elements = len(dataset)
