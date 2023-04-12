@@ -120,10 +120,10 @@ class GraphContainer(ABC):
         pass
             
     @abstractmethod
-    def _extract_light_grath(self, line: str) -> Graph:
+    def _extract_light_grath(self, line: str, coord_reverse: bool) -> Graph:
         pass
 
-    def _load_fromfile(self, filename: str, verbose: bool=True):
+    def _load_fromfile(self, filename: str, coord_reverse: bool=True, verbose: bool=True):
     
         with open(filename, 'r', encoding="utf-8") as f_light_path:
 
@@ -132,13 +132,13 @@ class GraphContainer(ABC):
             step = (n_lines // 100) + 1
             for idx, line in enumerate(lines):
 
-                pos, graph = self._extract_light_grath(line)
+                pos, graph = self._extract_light_grath(line, coord_reverse)
                 self.add_graph(pos, graph)
 
                 if verbose and (idx % step == 0 or idx >= n_lines - 1):
                     print(f'[Load of `{filename}`] -- progress: {(idx + 1) / n_lines * 100.:.0f}%', \
                           end='\r' if idx + 1 < n_lines else '\n')
-    
+            
     def __str__(self) -> str:
         return f'[n_keys: {len(self._graphs.keys())}, n_graphs: {self.n_graphs}, n_nodes: {self.n_nodes} ' \
             f'(duplicate: {self._n_built_nodes}), n_connections: {self.n_connections} ' \
@@ -180,9 +180,9 @@ class LightGraphContainer(GraphContainer, ABC):
        
     @classmethod
     def fromfile(cls, filename: str, scene_file: str, reference: np.ndarray=None, \
-        variant: str='scalar_rgb', verbose: bool=True):
+        variant: str='scalar_rgb', coord_reverse: bool=True, verbose: bool=True):
 
         graph_container = cls(scene_file, reference, variant)
-        graph_container._load_fromfile(filename, verbose)
+        graph_container._load_fromfile(filename, coord_reverse, verbose)
         
         return graph_container

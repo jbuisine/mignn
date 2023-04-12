@@ -3,7 +3,7 @@
 REF_SPP             = 1000
 GNN_SPP             = 10
 MAX_DEPTH           = 16
-VIEWPOINT_SIZE      = 8, 8
+VIEWPOINT_SIZE      = 16, 16
 VIEWPOINT_SAMPLES   = 2
 
 # build connections params
@@ -16,8 +16,9 @@ ENCODING            = 6 # None means no encoding (by default signal encoding)
 
 # dataset generation
 # reduce memory usage while generating dataset
-VIEWPOINT_CHUNK     = 20 # max size in Mo
+VIEWPOINT_CHUNK     = 1 # max size in Mo
 DATASET_CHUNK       = 200 # max size in Mo
+SCENE_REVERSE       = True # specify if width and height are reversed or not
 
 # Training params
 TRAINING_SPLIT      = 0.8
@@ -28,4 +29,4 @@ EPOCHS              = 20
 HIDDEN_CHANNELS     = 256
 
 # Predictions params
-PRED_VIEWPOINT_SIZE = 64, 64
+PRED_VIEWPOINT_SIZE = 32, 32

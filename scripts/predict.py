@@ -1,5 +1,6 @@
 import os
 import argparse
+import json
 import numpy as np
 from itertools import chain
 
@@ -17,7 +18,7 @@ from joblib import load as skload
 
 from models.gcn_model import GNNL
 
-from utils import prepare_data
+from utils import prepare_data, scale_subset, merge_by_chunk
 from utils import load_sensor_from, load_build_and_stack
 import matplotlib.pyplot as plt
 
@@ -81,62 +82,100 @@ def main():
                             ref_spp = MIGNNConf.REF_SPP,
                             sensors = sensors,
                             output_folder = f'{output_folder}/generated',
-                            chunk_enabled=False)
+                            sort_chunks=True)
 
     output_temp = f'{output_folder}/datasets/temp/'
     os.makedirs(output_temp, exist_ok=True)
-
-    print(gnn_folders)
-    # TODO: manage for each viewpoint (need to attach the correct viewpoint)
-    gnn_data = list(chain.from_iterable([ 
-                    [ 
-                        (
-                            os.path.join(folder, g_file), 
-                            os.path.join(output_temp, viewpoints[f_i]),
-                            ref_images[f_i]
-                        )
-                        for g_file in os.listdir(folder) 
-                    ] 
-                    for f_i, folder in enumerate(gnn_folders)
-                ]))
     
-    gnn_files_paths, output_temp_paths, gnn_ref_images = list(zip(*gnn_data))
+    output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
+    os.makedirs(output_temp_scaled, exist_ok=True)
+
+    # manage for each viewpoint
+    params = list(chain.from_iterable([ 
+                [ 
+                    (
+                        os.path.join(folder, g_file),
+                        scene_file,
+                        os.path.join(output_temp, viewpoints[f_i]),
+                        ref_images[f_i]
+                    )
+                    # need to sort file in order to preserve pixels order
+                    for g_file in sorted(os.listdir(folder)) 
+                ] 
+                for f_i, folder in enumerate(gnn_folders)
+            ]))
+    
     print('\n[Building connections] creating connections using Mistuba3')
     # multiprocess build of connections
     pool_obj = ThreadPool()
 
-    # load in parallel same scene file, imply error. Here we load multiple scenes
-    params = list(zip(gnn_files_paths,
-                [ scene_file for _ in range(len(gnn_files_paths)) ],
-                output_temp_paths,
-                gnn_ref_images))
-
     build_containers = []
     for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
         build_containers.append(result)
+        
+        
+    print('[Processing] scaling all subsets using saved model scalers')
+    # specify where to find each subsets    
+    scalers_folder = f'{model_folder}/scalers'
 
+    scaled_params = list(chain.from_iterable([ 
+            [ 
+                (
+                    os.path.join(output_temp, v_name, v_subset), 
+                    scalers_folder,
+                    os.path.join(output_temp_scaled, v_name)
+                )
+                # need to sort file in order to preserve pixels order
+                for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name))) 
+            ] 
+            for v_name in viewpoints
+        ]))
+    
+    print(scaled_params)
+
+    # multi-process scale of dataset
+    pool_obj_scaled = ThreadPool()
+
+    intermediate_scaled_datasets_path = []
+    for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
+        intermediate_scaled_datasets_path.append(result)
+    
+    print('[Processing] prepare chunked datasets for each viewpoint')
+    
+    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
+    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
+    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
+        
+    # reload scalers    
+    scalers = {
+        'x_node': x_scaler,
+        'x_edge': edge_scaler,
+        'y': y_scaler
+    }
+    
+    transforms_list = [ScalerTransform(scalers)]
+    
+    if MIGNNConf.ENCODING is not None:
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+
+    applied_transforms = GeoT.Compose(transforms_list)    
+
+    
     datasets_path = []
     for v_i, viewpoint in enumerate(viewpoints):
         
-        viewpoint_temp = os.path.join(output_temp, viewpoint)
-        intermediate_datasets = []
-        intermediate_datasets_path = os.listdir(viewpoint_temp)
+        # split there into memory chunked datasets
+        scaled_path = os.path.join(output_temp_scaled, viewpoint)
+        scaled_subsets = [ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ]
+        c_output_folder = f'{output_folder}/datasets/{viewpoint}_chunks'
+        merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
         
-        for dataset_name in intermediate_datasets_path:
-            c_dataset_path = os.path.join(viewpoint_temp, dataset_name)
-            c_dataset = PathLightDataset(root=c_dataset_path)
-            intermediate_datasets.append(c_dataset)
-            
-        # use concat dataset
-        dataset_path = f'{output_folder}/datasets/{viewpoint}'        
-        concat_datasets = torch.utils.data.ConcatDataset(intermediate_datasets)
-        dataset = PathLightDataset(dataset_path, concat_datasets, load=False)
-        print(f' -- [Intermediate save] save computed dataset into: {dataset_path}')
-        datasets_path.append(dataset_path)
-
-    print(f'[cleaning] clear intermediated saved containers into {output_temp}')
+        datasets_path.append(c_output_folder)
+      
+    print(f'[cleaning] clear intermediated saved containers')
     os.system(f'rm -r {output_temp}')
-
+    os.system(f'rm -r {output_temp_scaled}')
+    
     for v_i, sensor in enumerate(sensors):
 
         dataset_path = datasets_path[v_i]
@@ -144,58 +183,39 @@ def main():
         v_ref_image = np.asarray(cv2.imread(ref_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
         v_low_image = np.asarray(cv2.imread(low_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
 
-        print(f'[Manage viewpoint n°{v_i}: {viewpoint_name}]')
+        print(f'[Prediction for viewpoint n°{v_i}: {viewpoint_name}]')
 
-        dataset = PathLightDataset(root=dataset_path)
-
-        x_scaler = skload(f'{model_folder}/scalers/x_node_scaler.bin')
-        edge_scaler = skload(f'{model_folder}/scalers/x_edge_scaler.bin')
-        y_scaler = skload(f'{model_folder}/scalers/y_scaler.bin')
-
-        scaled_dataset_path = f'{output_folder}/datasets/{viewpoint_name}_scaled'
+        dataset_info = json.load(open(f'{dataset_path}/metadata', 'r', encoding='utf-8'))
+        n_node_features = int(dataset_info['n_node_features'])
         
-        scalers = {
-            'x_node': x_scaler,
-            'x_edge': edge_scaler,
-            'y': y_scaler
-        }
+        viewpoint_dataset_paths = sorted([ os.path.join(dataset_path, p) for p in os.listdir(dataset_path) \
+                    if 'metadata' not in p ])
+
         
-        transforms_list = [ScalerTransform(scalers)]
-        
-        if MIGNNConf.ENCODING is not None:
-            print('[Encoded required] scaled data will be encoded')
-            transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
-
-        applied_transforms = GeoT.Compose(transforms_list) 
-        
-        # TODO: check if necessary to apply transformation over this dataset
-        # such as train process
-        if not os.path.exists(scaled_dataset_path):
-
-            # save dataset
-            print(f' -- Save scaled dataset into: {scaled_dataset_path}')
-            PathLightDataset(scaled_dataset_path, dataset, pre_transform=applied_transforms)
-
-        print(f' -- Load scaled dataset from: {scaled_dataset_path}')
-        dataset = PathLightDataset(root=scaled_dataset_path, pre_transform=applied_transforms)
-
-        model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=dataset.num_node_features)
-        print(' -- Model has been loaded')
+        model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=n_node_features)
+        # print('[Information] Model has been loaded')
 
         model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
         model.eval()
-
+        
         pixels = []
 
-        n_predictions = len(dataset)
-        for b_i in range(n_predictions):
+        n_predict = 0
+        n_predictions = int(dataset_info["n_samples"])
+        for c_dataset_path in viewpoint_dataset_paths:
+            print(c_dataset_path)
 
-            data = dataset[b_i]
-            prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
-            prediction = y_scaler.inverse_transform(prediction.detach().numpy())
-            pixels.append(prediction)
+            dataset = PathLightDataset(root=c_dataset_path)
+            dataset_elements = len(dataset)
+            for d_i in range(dataset_elements): 
+                
+                data = dataset[d_i]
+                prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
+                prediction = y_scaler.inverse_transform(prediction.detach().numpy())
+                pixels.append(prediction)
 
-            print(f' -- Prediction progress: {(b_i + 1) / len(dataset) * 100.:.2f}%', end='\r')
+                print(f' -- Prediction progress: {(n_predict + 1) / n_predictions * 100.:.2f}%', end='\r')
+                n_predict += 1
 
         image = np.array(pixels).reshape((h_size, w_size, 3))
 

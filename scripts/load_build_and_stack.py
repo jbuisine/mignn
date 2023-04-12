@@ -6,9 +6,6 @@ import numpy as np
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 
-import mitsuba as mi
-mi.set_variant('scalar_rgb')
-
 # ignore Drjit warning
 import warnings
 warnings.filterwarnings('ignore')
@@ -17,7 +14,7 @@ from mignn.dataset import PathLightDataset
 from mignn.container import SimpleLightGraphContainer
 from mignn.manager import LightGraphManager
 
-from config import N_GRAPHS, N_NODES_PER_GRAPHS, N_NEIGHBORS
+import config as MIGNNConf
 
 def main():
 
@@ -39,17 +36,22 @@ def main():
     os.makedirs(output_dataset, exist_ok=True)
     
     # for gnn_file_name in sorted(os.listdir(gnn_folder)):
-    current_container = SimpleLightGraphContainer.fromfile(gnn_file_path, scene_file, ref_image, verbose=False)
-        
-    current_container.build_connections(n_graphs=N_GRAPHS, 
-                            n_nodes_per_graphs=N_NODES_PER_GRAPHS, 
-                            n_neighbors=N_NEIGHBORS, 
+    current_container = SimpleLightGraphContainer.fromfile(gnn_file_path, scene_file, ref_image, 
+                                                        coord_reverse=MIGNNConf.SCENE_REVERSE,
+                                                        verbose=False)
+      
+    current_container.build_connections(n_graphs=MIGNNConf.N_GRAPHS, 
+                            n_nodes_per_graphs=MIGNNConf.N_NODES_PER_GRAPHS, 
+                            n_neighbors=MIGNNConf.N_NEIGHBORS, 
                             verbose=False)
     build_container = LightGraphManager.vstack(current_container, verbose=False)
 
+    # keep the same filename
+    _, gnn_filename = os.path.split(gnn_file_path)
+    
     # save intermediate dataset path
-    dataset_path = os.path.join(output_dataset, f'{str(uuid.uuid4())}.path')
-        
+    dataset_path = os.path.join(output_dataset, gnn_filename)
+    
     PathLightDataset.from_container(build_container, dataset_path, load=False, verbose=False)
     del current_container
     del build_container

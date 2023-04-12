@@ -95,7 +95,7 @@ class AdvancedLightGraphContainer(LightGraphContainer):
         return False
         
     @classmethod
-    def _extract_light_grath(cls, line):
+    def _extract_light_grath(cls, line, coord_reverse):
 
         data = line.replace('\n', '').split(';')
 

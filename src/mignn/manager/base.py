@@ -4,7 +4,6 @@ from typing import List
 from mignn.entities.graph import LightGraph
 from mignn.entities.connection import RayConnection
 
-
 import random
 import numpy as np
 

@@ -1,10 +1,7 @@
 import os
-import uuid
 import argparse
 import psutil
 import numpy as np
-import math
-import json
 from itertools import chain
 
 import mitsuba as mi
@@ -22,96 +19,12 @@ from joblib import load as skload
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import prepare_data
+from utils import prepare_data, merge_by_chunk
 from utils import load_sensor_from, load_build_and_stack, scale_subset
 
 from transforms import ScalerTransform, SignalEncoder
 
 import config as MIGNNConf
-
-
-def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_transforms):
-    
-    memory_sum = 0
-    memory_size_in_bytes = MIGNNConf.DATASET_CHUNK * (1024 ** 2)
-    
-    data_list = []
-    
-    n_subsets = len(scaled_datasets_path)
-    step = (n_subsets // 100) + 1
-    
-    # also store metadata file
-    n_batchs = 0
-    n_samples = 0
-    n_node_features = None
-    n_target_features = None
-    
-    for idx, scaled_dataset_path in enumerate(scaled_datasets_path):
-        
-        c_scaled_dataset = PathLightDataset(root=scaled_dataset_path, 
-                                        pre_transform=applied_transforms)
-        
-        n_current_samples = len(c_scaled_dataset)
-        
-        if n_node_features is None:
-            n_node_features = c_scaled_dataset.num_node_features
-            n_target_features = c_scaled_dataset.num_target_features
-        
-        for c_data_i in range(n_current_samples):
-            data = c_scaled_dataset[c_data_i]
-            
-            # get current data memory size
-            memory_object = sum([v.element_size() * v.numel() for k, v in data])
-            memory_sum += memory_object
-                    
-            # need to store into intermediate dataset
-            # if limited memory is greater than fixed or end of train dataset size
-            if memory_sum > memory_size_in_bytes:
-        
-                n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
-                
-                # get the expected dataset folder
-                c_dataset_path = os.path.join(output_path, f'{str(uuid.uuid4())}.path')
-                
-                # save intermediate dataset with expected max size
-                PathLightDataset(c_dataset_path, data_list, load=False)
-                
-                # reset data list
-                data_list = []
-                
-                # reset memory sum
-                memory_sum = 0
-                
-                
-            data_list.append(data)
-            n_samples += 1
-                        
-        # clear memory
-        del c_scaled_dataset
-        
-        if (idx % step == 0 or idx >= n_subsets - 1):
-            print(f'[Prepare {output_name} dataset (with chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
-                end='\r' if idx + 1 < n_subsets else '\n')
-        
-    # do last save if needed    
-    if len(data_list) > 0:
-        n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
-                
-        c_dataset_path = os.path.join(output_path, f'{str(uuid.uuid4())}.path')
-        # save intermediate dataset with expected max size
-        PathLightDataset(c_dataset_path, data_list, load=False)
-        
-    # save training metadata
-    metadata = { 
-        'n_samples': n_samples, 
-        'n_batchs': n_batchs,
-        'n_node_features': n_node_features,
-        'n_target_features': n_target_features,
-    }
-    
-    with open(f'{output_path}/metadata', 'w', encoding='utf-8') as outfile:
-        json.dump(metadata, outfile)
-
 
 def main():
 
@@ -304,12 +217,9 @@ def main():
         n_intermediates = len(intermediate_datasets_path)
         intermediate_scaled_datasets_path = []
         
-        print(f'[Before intermediate] memory usage is: {psutil.virtual_memory().percent}%')
-        
         # multi-process scale of dataset
         pool_obj_scaled = ThreadPool()
     
-        # load in parallel same scene file, imply error. Here we load multiple scenes
         scaled_params = list(zip(datasets_path,
                     [ scalers_folder for _ in range(n_intermediates) ],
                     output_scaled
