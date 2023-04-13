@@ -218,16 +218,16 @@ def main():
 
         os.makedirs(f'{output_folder}/low_res', exist_ok=True)
         low_image_path = f'{output_folder}/low_res/{viewpoint_name}.exr'
-        mi.util.write_bitmap(low_image_path, v_low_image)
+        cv2.imwrite(low_image_path, v_low_image)
 
         os.makedirs(f'{output_folder}/predictions', exist_ok=True)
         image_path = f'{output_folder}/predictions/{viewpoint_name}.exr'
-        mi.util.write_bitmap(image_path, image)
+        cv2.imwrite(image_path, image)
         print(f' -- Predicted image has been saved into: {image_path}')
 
         os.makedirs(f'{output_folder}/references', exist_ok=True)
         ref_image_path = f'{output_folder}/references/{viewpoint_name}.exr'
-        mi.util.write_bitmap(ref_image_path, v_ref_image)
+        cv2.imwrite(ref_image_path, v_ref_image)
         print(f' -- Reference image has been saved into: {ref_image_path}')
 
         predictions.append(image_path)
@@ -247,28 +247,30 @@ def main():
         ref_image = np.asarray(cv2.imread(ref_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
         low_image = np.asarray(cv2.imread(low_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
 
-        gnn_ssim_score = SSIM(pred_image, ref_image, channel_axis=2, data_range=255)
+        max_range = np.max([np.max(pred_image), np.max(ref_image), np.max(low_image)])
+        
+        gnn_ssim_score = SSIM(pred_image, ref_image, channel_axis=2, data_range=max_range)
         gnn_mse_score = MSE(pred_image, ref_image)
 
-        low_ssim_score = SSIM(low_image, ref_image, channel_axis=2, data_range=255)
+        low_ssim_score = SSIM(low_image, ref_image, channel_axis=2, data_range=max_range)
         low_mse_score = MSE(low_image, ref_image)
 
         # TODO: display png image instead of EXR (error when displaying)
-        #im_gamma_correct = np.clip(np.power(low_image, 2), 0, 1)
-        #low_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 0].imshow(low_image)
+        im_gamma_correct = np.clip(np.power(low_image, 0.8), 0, 1)
+        low_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 0].imshow(low_im_fixed)
         axs[p_i, 0].set_title(f'From: (SSIM: {low_ssim_score:.4f}, MSE: {low_mse_score:.4f})')
         axs[p_i, 0].axis('off')
 
-        #im_gamma_correct = np.clip(np.power(pred_image, 0.45), 0, 1)
-        #pred_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 1].imshow(pred_image)
+        im_gamma_correct = np.clip(np.power(pred_image, 0.8), 0, 1)
+        pred_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 1].imshow(pred_im_fixed)
         axs[p_i, 1].set_title(f'GNN: (SSIM: {gnn_ssim_score:.4f}, MSE: {gnn_mse_score:.4f})')
         axs[p_i, 1].axis('off')
 
-        #im_gamma_correct = np.clip(np.power(ref_image, 0.45), 0, 1)
-        #ref_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
-        axs[p_i, 2].imshow(ref_image)
+        im_gamma_correct = np.clip(np.power(ref_image, 0.8), 0, 1)
+        ref_im_fixed = Image.fromarray(np.uint8(im_gamma_correct * 255))
+        axs[p_i, 2].imshow(ref_im_fixed)
         axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 

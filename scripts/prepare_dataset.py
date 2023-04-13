@@ -1,5 +1,6 @@
 import os
 import argparse
+import random
 import numpy as np
 from itertools import chain
 
@@ -100,8 +101,9 @@ def main():
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
-        # ensure file orders
-        intermediate_datasets_path = sorted(os.listdir(output_temp))
+        # ensure file orders?
+        intermediate_datasets_path = os.listdir(output_temp)
+        random.shuffle(intermediate_datasets_path)
         
         x_scaler = init_normalizer(MIGNNConf.NORMALIZER)
         edge_scaler = init_normalizer(MIGNNConf.NORMALIZER)
@@ -155,7 +157,7 @@ def main():
             # save intermediate dataset
             intermediate_train_dataset = PathLightDataset(temp_train_path, train_data)
             # only save
-            PathLightDataset(temp_test_path, test_data) 
+            PathLightDataset(temp_test_path, test_data, load=False) 
             
             # partial fit on test set
             # ensure re-affectation (returns self)

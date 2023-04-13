@@ -78,7 +78,7 @@ def main():
         # Warn: need to respect number of batch (config batch size)
         for dataset_path in datasets:    
             
-            train_dataset = PathLightDataset(root=f'{dataset_path}')
+            train_dataset = PathLightDataset(root=dataset_path)
             train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
             
             for data in train_loader:  # Iterate in batches over the training dataset.
@@ -107,7 +107,7 @@ def main():
         # Warn: need to respect number of batch (config batch size)
         for dataset_path in datasets:    
             
-            dataset = PathLightDataset(root=f'{dataset_path}')
+            dataset = PathLightDataset(root=dataset_path)
             loader = DataLoader(dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
         
             for data in loader:  # Iterate in batches over the training/test dataset.
@@ -119,7 +119,7 @@ def main():
                 error += loss.item()
                 r2_error += r2_score(out.flatten(), data.y.flatten()).item()
                 
-        return error / n_batchs, r2_error / n_batchs  # Derive ratio of correct predictions.
+        return error / n_batchs, r2_error / n_batchs
 
     stat_file = open(f'{stats_folder}/scores.csv', 'w', encoding='utf-8')
     stat_file.write('train_loss;train_r2;test_loss;test_r2\n')

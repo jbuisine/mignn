@@ -99,7 +99,7 @@ class SimpleLightGraphContainer(LightGraphContainer):
         else:
             sample_pos = list(map(int, map(float, data[0].split(','))))
         
-        position = list(map(float, data[1].split(',')))[::-1]
+        position = list(map(float, data[1].split(',')))
         # simulated camera normal (direction vector)
         normal = list(map(float, data[2].split(',')))
 
