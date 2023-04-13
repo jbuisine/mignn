@@ -158,9 +158,10 @@ def main():
             PathLightDataset(temp_test_path, test_data) 
             
             # partial fit on test set
-            x_scaler.partial_fit(intermediate_train_dataset.data.x)
-            edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
-            y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+            # ensure re-affectation (returns self)
+            x_scaler = x_scaler.partial_fit(intermediate_train_dataset.data.x)
+            edge_scaler = edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
+            y_scaler = y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
             
         
         print(f'[Information] dataset is composed of {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs})')    
