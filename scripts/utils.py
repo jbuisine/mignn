@@ -6,6 +6,9 @@ import sys
 import math
 import json
 
+import torch
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
+
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 import subprocess
@@ -272,7 +275,7 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
                     i_str = f'0{i_str}'
                     
                 c_dataset_path = os.path.join(output_path, f'merged_scaled_{i_str}.path')
-                print(n_saved, c_dataset_path)
+                
                 # save intermediate dataset with expected max size
                 PathLightDataset(c_dataset_path, data_list, load=False)
                 
@@ -306,7 +309,7 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
         n_batchs += math.ceil(len(data_list) / MIGNNConf.BATCH_SIZE)
                 
         c_dataset_path = os.path.join(output_path, f'merged_scaled_{i_str}.path')
-        print(n_saved, c_dataset_path)
+        
         # save intermediate dataset with expected max size
         PathLightDataset(c_dataset_path, data_list, load=False)
         
@@ -320,3 +323,34 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
     
     with open(f'{output_path}/metadata', 'w', encoding='utf-8') as outfile:
         json.dump(metadata, outfile)
+
+
+def init_loss(loss_name):
+    """Get the expected torch loss
+    """
+    
+    if loss_name == 'MSE':
+        return torch.nn.MSELoss()
+
+    if loss_name == 'MAE':
+        return torch.nn.L1Loss()
+    
+    if loss_name == 'Huber':
+        return torch.nn.HuberLoss()
+    
+    return None
+
+def init_normalizer(normalizer_name):
+    """Get the expected sklearn normalizer
+    """
+    
+    if normalizer_name == 'MinMax':
+        return MinMaxScaler()
+
+    if normalizer_name == 'Norm':
+        return Normalizer()
+    
+    if normalizer_name == 'Standard':
+        return StandardScaler()
+    
+    return None

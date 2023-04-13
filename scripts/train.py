@@ -9,6 +9,7 @@ from torchmetrics import R2Score
 
 from mignn.dataset import PathLightDataset
 
+from utils import init_loss
 from models.gcn_model import GNNL
 import config as MIGNNConf
 
@@ -60,7 +61,7 @@ def main():
     print(f'[Information] model with number of params: {sum(p.numel() for p in model.parameters())}')
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = torch.nn.MSELoss()
+    criterion = init_loss(MIGNNConf.LOSS)
     r2_score = R2Score().to(device)
 
     def train(epoch_id, datasets, n_batchs):

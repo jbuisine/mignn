@@ -1,6 +1,5 @@
 import os
 import argparse
-import psutil
 import numpy as np
 from itertools import chain
 
@@ -12,17 +11,16 @@ from mignn.dataset import PathLightDataset
 
 import torch_geometric.transforms as GeoT
 
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
 from joblib import dump as skdump
 from joblib import load as skload
 
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import prepare_data, merge_by_chunk
+from utils import prepare_data, merge_by_chunk, init_normalizer
 from utils import load_sensor_from, load_build_and_stack, scale_subset
 
-from transforms import ScalerTransform, SignalEncoder
+from mignn.processing import ScalerTransform, SignalEncoder
 
 import config as MIGNNConf
 
@@ -105,9 +103,9 @@ def main():
         # ensure file orders
         intermediate_datasets_path = sorted(os.listdir(output_temp))
         
-        x_scaler = MinMaxScaler()
-        edge_scaler = MinMaxScaler()
-        y_scaler = MinMaxScaler()
+        x_scaler = init_normalizer(MIGNNConf.NORMALIZER)
+        edge_scaler = init_normalizer(MIGNNConf.NORMALIZER)
+        y_scaler = init_normalizer(MIGNNConf.NORMALIZER)
     
         print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
         

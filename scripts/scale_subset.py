@@ -12,7 +12,7 @@ import torch_geometric.transforms as GeoT
 from mignn.dataset import PathLightDataset
 import config as MIGNNConf
 
-from transforms import ScalerTransform, SignalEncoder
+from mignn.processing import ScalerTransform, SignalEncoder
 
 def main():
 

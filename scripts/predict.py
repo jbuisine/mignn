@@ -30,7 +30,7 @@ from skimage.metrics import structural_similarity as SSIM
 from PIL import Image
 
 import torch_geometric.transforms as GeoT
-from transforms import ScalerTransform, SignalEncoder
+from mignn.processing import ScalerTransform, SignalEncoder
 
 import config as MIGNNConf
 
