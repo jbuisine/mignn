@@ -27,7 +27,6 @@ def main():
     scalers_folder   = args.scalers
     output_folder    = args.output
     
-    
     _, dataset_name = os.path.split(dataset_path)
     c_dataset = PathLightDataset(root=dataset_path)
     

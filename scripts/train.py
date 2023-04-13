@@ -94,7 +94,7 @@ def main():
                 optimizer.zero_grad()  # Clear gradients.
 
                 print(f'[Epoch n°{epoch_id:03d}] -- progress: {(b_i + 1) / n_batchs * 100.:.2f}%' \
-                    f' (Loss: {error / (b_i + 1):.5f}, R²: {r2_error / (b_i + 1):.5f})', end='\r')
+                    f' ({MIGNNConf.LOSS} loss: {error / (b_i + 1):.5f}, R²: {r2_error / (b_i + 1):.5f})', end='\r')
                 b_i += 1
 
     def test(datasets, n_batchs):
@@ -141,8 +141,8 @@ def main():
         # save model stat data
         stat_file.write(f'{train_loss};{train_r2};{test_loss};{test_r2}\n')
 
-        print(f'[Epoch n°{epoch:03d}]: Train (Loss: {train_loss:.5f}, R²: {train_r2:.5f}), '\
-            f'Test (Loss: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
+        print(f'[Epoch n°{epoch:03d}]: Train ({MIGNNConf.LOSS} loss: {train_loss:.5f}, R²: {train_r2:.5f}), '\
+            f'Test ({MIGNNConf.LOSS} loss: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
 
     stat_file.close()
 

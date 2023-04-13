@@ -80,8 +80,8 @@ def main():
                                     output_folder = f'{output_folder}/train/generated')
 
         gnn_files = list(chain.from_iterable([ 
-                                    [ os.path.join(f, g_file) for g_file in os.listdir(f) ] 
-                                    for f in gnn_folders 
+                                    [ os.path.join(folder, g_file) for g_file in os.listdir(folder) ] 
+                                    for folder in gnn_folders 
                                 ]))
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
@@ -138,7 +138,7 @@ def main():
             temp_test_path = os.path.join(output_temp_test, dataset_name)
                     
             # shuffle data
-            indices = np.arange(split_index)
+            indices = np.arange(n_elements)
             np.random.shuffle(indices)
             train_indices = indices[:split_index]
             
@@ -159,11 +159,10 @@ def main():
             
             # partial fit on test set
             # ensure re-affectation (returns self)
-            x_scaler = x_scaler.partial_fit(intermediate_train_dataset.data.x)
-            edge_scaler = edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
-            y_scaler = y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+            x_scaler.partial_fit(intermediate_train_dataset.data.x)
+            edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
+            y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
             
-        
         print(f'[Information] dataset is composed of {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs})')    
         
         # save scalers
