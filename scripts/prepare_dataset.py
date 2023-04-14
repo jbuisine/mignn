@@ -89,8 +89,6 @@ def main():
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
         pool_obj = ThreadPool()
-        
-        print(len(gnn_files))
 
         # load in parallel same scene file, imply error. Here we load multiple scenes
         params = list(zip(gnn_files,
@@ -107,7 +105,6 @@ def main():
         # Then fusion PathLightDatasets into only one
         # ensure file orders?
         intermediate_datasets_path = sorted(os.listdir(output_temp))
-        print(intermediate_datasets_path)
         random.shuffle(intermediate_datasets_path)
         
         x_scaler = init_normalizer(MIGNNConf.NORMALIZER)
