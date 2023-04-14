@@ -104,18 +104,21 @@ class SimpleLightGraphContainer(LightGraphContainer):
         normal = list(map(float, data[2].split(',')))
 
         # get luminance
-        target_luminance = list(map(float, data[-1].split(',')))
+        c_luminance = list(map(float, data[-1].split(',')))
 
         # prepare new graph
         # TODO: use of reference image if exists
         if self._reference is not None:
             pos_x, pos_y = sample_pos
             target_luminance = list(np.array(self._reference[pos_x, pos_y, :]))
+        else:
+            raise ValueError('Expected reference image for this kind of loader!')
             
         graph = LightGraph(position, target_luminance)
 
         # default origin node
-        prev_node = RayNode(position, normal, primary=True)
+        # zero radiance by default
+        prev_node = RayNode(position, normal, c_luminance, primary=True)
 
         graph.add_node(prev_node)
 
@@ -128,16 +131,24 @@ class SimpleLightGraphContainer(LightGraphContainer):
             node_data = node.split('::')
 
             distance = float(node_data[0])
-            valid = float(node_data[1])
+            valid = bool(int(node_data[1]))
+            has_next = bool(int(node_data[2]))
+            
             # bsdf_weight = list(map(float, node_data[1].split(',')))
-            position = list(map(float, node_data[3].split(',')))
-            normal = list(map(float, node_data[4].split(',')))
+            position = list(map(float, node_data[4].split(',')))
+            normal = list(map(float, node_data[5].split(',')))
+            
+            # only is there is next computation
+            if has_next:
+                radiance = list(map(float, node_data[7].split(',')))
+            else:
+                radiance = [0, 0, 0]
 
             # set RayNode as primary
             if n_i == 0:
-                node = RayNode(position, normal, primary=True)
+                node = RayNode(position, normal, radiance, primary=True)
             else:
-                node = RayNode(position, normal)
+                node = RayNode(position, normal, radiance)
                 
             graph.add_node(node)
             

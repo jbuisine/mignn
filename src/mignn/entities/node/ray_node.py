@@ -9,10 +9,12 @@ class RayNode(Node):
     """
     
     def __init__(self, position: list[float, float, float], \
-            normal: list[float, float, float], primary: bool=False):
+            normal: list[float, float, float], \
+            radiance: list[float, float, float], primary: bool=False):
         super().__init__()
         self._position = position
         self._normal = normal
+        self._radiance = radiance
         self._primary = primary
        
     @property
@@ -24,8 +26,12 @@ class RayNode(Node):
         return self._normal
     
     @property
+    def radiance(self) -> List[float]:
+        return self._radiance
+    
+    @property
     def properties(self) -> List[float]:
-        return self._position + self._normal
+        return self._position + self._normal + self._radiance
 
     @property
     def primary(self) -> bool:
@@ -33,4 +39,4 @@ class RayNode(Node):
         
     def __str__(self) -> str:
         return f'[position: {self.position}, normal: {self.normal}, \
-            primary: {self._primary}]'
+            radiance: {self.radiance}, primary: {self._primary}]'
