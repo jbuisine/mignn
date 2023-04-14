@@ -80,19 +80,23 @@ def main():
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/train/generated')
 
-        gnn_files = list(chain.from_iterable([ 
-                                    [ os.path.join(folder, g_file) for g_file in os.listdir(folder) ] 
-                                    for folder in gnn_folders 
-                                ]))
+        # associate for each file in gnn_folder, the correct reference image
+        gnn_files, references = list(zip(*list(chain.from_iterable(list([ 
+                        [ (os.path.join(folder, g_file), ref_images[f_i]) for g_file in os.listdir(folder) ] 
+                        for f_i, folder in enumerate(gnn_folders) 
+                    ])))))
+        
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
         pool_obj = ThreadPool()
+        
+        print(len(gnn_files))
 
         # load in parallel same scene file, imply error. Here we load multiple scenes
         params = list(zip(gnn_files,
                     [ scene_file for _ in range(len(gnn_files)) ],
                     [ output_temp for _ in range(len(gnn_files)) ],
-                    ref_images
+                    references
                 ))
 
         build_containers = []
@@ -102,7 +106,8 @@ def main():
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
         # ensure file orders?
-        intermediate_datasets_path = os.listdir(output_temp)
+        intermediate_datasets_path = sorted(os.listdir(output_temp))
+        print(intermediate_datasets_path)
         random.shuffle(intermediate_datasets_path)
         
         x_scaler = init_normalizer(MIGNNConf.NORMALIZER)
@@ -123,10 +128,10 @@ def main():
         n_train_graphs = 0
         
         for dataset_name in intermediate_datasets_path:
-            
+                
             c_dataset_path = os.path.join(output_temp, dataset_name)
             subset = PathLightDataset(root=c_dataset_path)
-            
+                
             # record data
             n_elements = len(subset)
             n_graphs += n_elements

@@ -164,8 +164,10 @@ def main():
         
         # split there into memory chunked datasets
         scaled_path = os.path.join(output_temp_scaled, viewpoint)
-        scaled_subsets = [ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ]
+        scaled_subsets = sorted([ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ])
         c_output_folder = f'{output_folder}/datasets/{viewpoint}_chunks'
+        
+        # chunk subsets
         merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
         
         datasets_path.append(c_output_folder)
@@ -209,6 +211,7 @@ def main():
                 data = dataset[d_i]
                 prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
                 prediction = y_scaler.inverse_transform(prediction.detach().numpy())
+                
                 pixels.append(prediction)
 
                 print(f' -- Prediction progress: {(n_predict + 1) / n_predictions * 100.:.2f}%', end='\r')
