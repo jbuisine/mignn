@@ -2,6 +2,8 @@
 
 from .base import Node
 
+import numpy as np
+
 from typing import List
 
 class RayNode(Node):
@@ -14,7 +16,8 @@ class RayNode(Node):
         super().__init__()
         self._position = position
         self._normal = normal
-        self._radiance = radiance
+        self._radiances = []
+        self._radiances.append(radiance)
         self._primary = primary
        
     @property
@@ -27,15 +30,18 @@ class RayNode(Node):
     
     @property
     def radiance(self) -> List[float]:
-        return self._radiance
+        return list(np.mean(self._radiances, axis=0))
     
     @property
     def properties(self) -> List[float]:
-        return self._position + self._normal + self._radiance
+        return self._position + self._normal + self.radiance
 
     @property
     def primary(self) -> bool:
         return self._primary
+    
+    def add_radiance(self, radiance: list[float, float, float]) -> None:
+        self._radiances.append(radiance)
         
     def __str__(self) -> str:
         return f'[position: {self.position}, normal: {self.normal}, \
