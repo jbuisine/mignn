@@ -78,7 +78,6 @@ def main():
         # Warn: need to respect number of batch (config batch size)
         for dataset_path in datasets:    
             
-            
             train_dataset = PathLightDataset(root=dataset_path)
             train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
             
@@ -97,6 +96,8 @@ def main():
                 print(f'[Epoch n°{epoch_id:03d}] -- progress: {(b_i + 1) / n_batchs * 100.:.2f}%' \
                     f' ({MIGNNConf.LOSS} loss: {error / (b_i + 1):.5f}, R²: {r2_error / (b_i + 1):.5f})', end='\r')
                 b_i += 1
+                
+        return error / n_batchs, r2_error / n_batchs
 
     def test(datasets, n_batchs):
         model.eval()
@@ -128,8 +129,8 @@ def main():
     # save best only
     current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
     for epoch in range(1, n_epochs + 1):
-        train(epoch, dataset_train_paths, train_n_batchs)
-        train_loss, train_r2 = test(dataset_train_paths, train_n_batchs)
+        train_loss, train_r2 = train(epoch, dataset_train_paths, train_n_batchs)
+        # train_loss, train_r2 = test(dataset_train_paths, train_n_batchs)
         test_loss, test_r2 = test(dataset_test_paths, test_n_batchs)
         
         # save best only

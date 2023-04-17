@@ -50,6 +50,7 @@ def chunk_file(filename, output_folder, chunk_memory_size, sort_chunks=False):
     
     # enable of not sorted keys (could be necessary when predicting)
     if sort_chunks:
+        # TODO: use of ordered generated keys
         pixels_items = sorted(pixels_rows.items())
     else:
         pixels_items = pixels_rows.items()    
