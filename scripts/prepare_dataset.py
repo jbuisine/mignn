@@ -127,7 +127,7 @@ def main():
         train_data = []
         test_data = []
         
-        require_tracked_data = any([v not in ['Standard', 'MinMax', None] for k, v in MIGNNConf.NORMALIZERS.items()])
+        require_tracked_data = any([v not in ['Standard', 'MinMax', None] for _, v in MIGNNConf.NORMALIZERS.items()])
         
         if require_tracked_data:
             print('[Warn] specified normalizers require the storage of all training data. \
@@ -154,7 +154,6 @@ def main():
             indices = np.arange(n_elements)
             np.random.shuffle(indices)
             train_indices = indices[:split_index]
-            print(train_indices)
             
             # fill data
             for i in range(n_elements):
@@ -179,7 +178,7 @@ def main():
                 y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
                 
             # reset train data list if necessary
-            if require_tracked_data:
+            if not require_tracked_data:
                 train_data = []
             
             # always clear test data
