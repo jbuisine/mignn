@@ -78,6 +78,7 @@ def main():
         # Warn: need to respect number of batch (config batch size)
         for dataset_path in datasets:    
             
+            
             train_dataset = PathLightDataset(root=dataset_path)
             train_loader = DataLoader(train_dataset, batch_size=MIGNNConf.BATCH_SIZE, shuffle=True)
             

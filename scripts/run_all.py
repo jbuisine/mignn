@@ -12,6 +12,8 @@ def main():
     args = parser.parse_args()
 
     output_folder = args.output
+    
+    scalers = '-'.join([ str(v) for _, v in MIGNNConf.NORMALIZERS.items() ])
 
     SCENE_FILE = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/scene.xml'
     OUTPUT_DATA = os.path.join(f'{output_folder}', f'{MIGNNConf.SCENE_NAME}_' \
@@ -20,12 +22,13 @@ def main():
         f'E{MIGNNConf.ENCODING}_' \
         f'D{MIGNNConf.MAX_DEPTH}_' \
         f'LOSS_{MIGNNConf.LOSS}_' \
-        f'NORM_{MIGNNConf.NORMALIZER}')
+        f'NORM_{scalers}')
     OUTPUT_PREDICT = f'{OUTPUT_DATA}_predict'
 
     TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'
     TEST_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_test'
     
+    print(f'[Information] results will be saved into: `{OUTPUT_DATA}`')    
     # Run dataset generation
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}',

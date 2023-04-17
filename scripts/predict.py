@@ -172,7 +172,7 @@ def main():
         
         datasets_path.append(c_output_folder)
       
-    print(f'[cleaning] clear intermediated saved containers')
+    print('[Cleaning] clear intermediated saved containers')
     os.system(f'rm -r {output_temp}')
     os.system(f'rm -r {output_temp_scaled}')
     
@@ -209,8 +209,11 @@ def main():
             for d_i in range(dataset_elements): 
                 
                 data = dataset[d_i]
-                prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
-                prediction = y_scaler.inverse_transform(prediction.detach().numpy())
+                prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch).detach().numpy()
+                
+                # only if scaler is enabled
+                if y_scaler is not None:
+                    prediction = y_scaler.inverse_transform(prediction)
                 
                 pixels.append(prediction)
 

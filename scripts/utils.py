@@ -7,7 +7,7 @@ import math
 import json
 
 import torch
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
@@ -347,8 +347,8 @@ def init_normalizer(normalizer_name):
     if normalizer_name == 'MinMax':
         return MinMaxScaler()
 
-    if normalizer_name == 'Norm':
-        return Normalizer()
+    if normalizer_name == 'Robust':
+        return RobustScaler()
     
     if normalizer_name == 'Standard':
         return StandardScaler()

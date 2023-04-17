@@ -92,7 +92,8 @@ class LightGraphManager():
                 if not node in origin_nodes:
                     current_graph.add_node(node)
                 else:
-                    # add perceived radiance from origin from every graph
+                    # add perceived radiance from origin from every graph 
+                    # (enable to compute mean perceived radiance later)
                     random_origin_node.add_radiance(node.radiance)
 
             for connection in connections_list:

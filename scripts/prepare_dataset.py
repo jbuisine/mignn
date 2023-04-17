@@ -107,9 +107,9 @@ def main():
         intermediate_datasets_path = sorted(os.listdir(output_temp))
         random.shuffle(intermediate_datasets_path)
         
-        x_scaler = init_normalizer(MIGNNConf.NORMALIZER)
-        edge_scaler = init_normalizer(MIGNNConf.NORMALIZER)
-        y_scaler = init_normalizer(MIGNNConf.NORMALIZER)
+        x_scaler = init_normalizer(MIGNNConf.NORMALIZERS['x_node'])
+        edge_scaler = init_normalizer(MIGNNConf.NORMALIZERS['x_edge'])
+        y_scaler = init_normalizer(MIGNNConf.NORMALIZERS['y'])
     
         print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
         
@@ -124,11 +124,20 @@ def main():
         n_graphs = 0
         n_train_graphs = 0
         
+        train_data = []
+        test_data = []
+        
+        require_tracked_data = any([v not in ['Standard', 'MinMax', None] for k, v in MIGNNConf.NORMALIZERS.items()])
+        
+        if require_tracked_data:
+            print('[Warn] specified normalizers require the storage of all training data. \
+                This can cause a memory surge.')
+        
         for dataset_name in intermediate_datasets_path:
                 
             c_dataset_path = os.path.join(output_temp, dataset_name)
             subset = PathLightDataset(root=c_dataset_path)
-                
+ 
             # record data
             n_elements = len(subset)
             n_graphs += n_elements
@@ -145,9 +154,7 @@ def main():
             indices = np.arange(n_elements)
             np.random.shuffle(indices)
             train_indices = indices[:split_index]
-            
-            train_data = []
-            test_data = []
+            print(train_indices)
             
             # fill data
             for i in range(n_elements):
@@ -161,21 +168,45 @@ def main():
             # only save
             PathLightDataset(temp_test_path, test_data, load=False) 
             
-            # partial fit on test set
-            # ensure re-affectation (returns self)
-            x_scaler.partial_fit(intermediate_train_dataset.data.x)
-            edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
-            y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+            # partial fit on train set when possible
+            if MIGNNConf.NORMALIZERS['x_node'] in ['Standard', 'MinMax'] and x_scaler is not None:
+                x_scaler.partial_fit(intermediate_train_dataset.data.x)
+            
+            if MIGNNConf.NORMALIZERS['x_edge'] in ['Standard', 'MinMax'] and edge_scaler is not None:
+                edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
+                
+            if MIGNNConf.NORMALIZERS['y'] in ['Standard', 'MinMax'] and y_scaler is not None:
+                y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+                
+            # reset train data list if necessary
+            if require_tracked_data:
+                train_data = []
+            
+            # always clear test data
+            test_data = []
             
         print(f'[Information] dataset is composed of {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs})')    
         
+        # ensure normalization using scalers with no partial fit method
+        if require_tracked_data:
+            
+            c_dataset, _ = PathLightDataset.collate(train_data)
+            
+            if MIGNNConf.NORMALIZERS['x_node'] not in ['Standard', 'MinMax'] and x_scaler is not None:
+                x_scaler.fit(c_dataset.x)
+            
+            if MIGNNConf.NORMALIZERS['x_edge'] not in ['Standard', 'MinMax'] and edge_scaler is not None:
+                edge_scaler.fit(c_dataset.edge_attr)
+                
+            if MIGNNConf.NORMALIZERS['y'] not in ['Standard', 'MinMax'] and y_scaler is not None:
+                y_scaler.fit(c_dataset.y.reshape(-1, 3))
+            
         # save scalers
         os.makedirs(scalers_folder, exist_ok=True)
         
         skdump(x_scaler, f'{scalers_folder}/x_node_scaler.bin', compress=True)
         skdump(edge_scaler, f'{scalers_folder}/x_edge_scaler.bin', compress=True)
         skdump(y_scaler, f'{scalers_folder}/y_scaler.bin', compress=True)
-
 
     x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
     edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')

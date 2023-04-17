@@ -13,10 +13,15 @@ class ScalerTransform(BaseTransform):
 
     def __call__(self, data: Data) -> Data:
         
-        # perform scale of data
-        data.x = torch.tensor(self._x_scaler.transform(data.x), dtype=torch.float)
-        data.edge_attr = torch.tensor(self._edge_scaler.transform(data.edge_attr), dtype=torch.float)
-        data.y = torch.tensor(self._y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
+        # perform scale of data (if scaler exists)
+        if self._x_scaler is not None:
+            data.x = torch.tensor(self._x_scaler.transform(data.x), dtype=torch.float)
+        
+        if self._edge_scaler is not None:
+            data.edge_attr = torch.tensor(self._edge_scaler.transform(data.edge_attr), dtype=torch.float)
+        
+        if self._y_scaler is not None:
+            data.y = torch.tensor(self._y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
 
         return data
     
