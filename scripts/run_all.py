@@ -20,6 +20,7 @@ def main():
         f'IMG_{MIGNNConf.VIEWPOINT_SIZE[0]}_{MIGNNConf.VIEWPOINT_SIZE[1]}_' \
         f'N{MIGNNConf.VIEWPOINT_SAMPLES}_' \
         f'E{MIGNNConf.ENCODING}_' \
+        f'M-{"".join(list(map(str, MIGNNConf.MASK)))}_' \
         f'D{MIGNNConf.MAX_DEPTH}_' \
         f'LOSS_{MIGNNConf.LOSS}_' \
         f'NORM_{scalers}')
