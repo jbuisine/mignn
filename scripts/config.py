@@ -6,7 +6,7 @@ SCENE_NAME            = "teapot-double_copy"
 REF_SPP               = 10000
 GNN_SPP               = 10
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 32, 32
+VIEWPOINT_SIZE        = 16, 16
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]
@@ -28,12 +28,12 @@ SCENE_REVERSE         = True # specify if width and height are reversed or not
 # [Training params]
 # specific to the server
 LOSS                  = 'MSE' # MSE, Huber, MAE are supported 
-# (MinMax, Robust, Standard) normalizers are supported
+# (MinMax, Robust, Standard, LogMinMax, LogRobust, LogStandard) normalizers are supported
 # `None` for no normalization
 NORMALIZERS           = {
     'x_node': 'MinMax',
     'x_edge': 'MinMax',
-    'y': None
+    'y': 'LogMinMax'
 } 
 TRAINING_SPLIT        = 0.8
 BATCH_SIZE            = 128
@@ -43,4 +43,4 @@ EPOCHS                = 100
 HIDDEN_CHANNELS       = 256
 
 # [Predictions params]
-PRED_VIEWPOINT_SIZE   = 100, 100
+PRED_VIEWPOINT_SIZE   = 64, 64

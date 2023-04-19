@@ -17,6 +17,7 @@ import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
 
 from mignn.dataset import PathLightDataset
+from mignn.processing.scalers import LogStandardScaler, LogMinMaxScaler, LogRobustScaler
 
 import config as MIGNNConf
       
@@ -209,8 +210,6 @@ def load_build_and_stack(params):
         "--output", output_temp])
     process.wait()
 
-    # build_container = dill.load(open(expected_container_path, 'rb'))
-
     return True
 
 
@@ -353,5 +352,14 @@ def init_normalizer(normalizer_name):
     
     if normalizer_name == 'Standard':
         return StandardScaler()
+    
+    if normalizer_name == 'LogMinMax':
+        return LogMinMaxScaler()
+
+    if normalizer_name == 'LogRobust':
+        return LogRobustScaler()
+    
+    if normalizer_name == 'LogStandard':
+        return LogStandardScaler()
     
     return None

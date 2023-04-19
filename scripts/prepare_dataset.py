@@ -127,7 +127,8 @@ def main():
         train_data = []
         test_data = []
         
-        require_tracked_data = any([v not in ['Standard', 'MinMax', None] for _, v in MIGNNConf.NORMALIZERS.items()])
+        partial_fit_normalizers = ['Standard', 'MinMax', 'LogStandard', 'LogMinMax']
+        require_tracked_data = any([v not in partial_fit_normalizers + [None] for _, v in MIGNNConf.NORMALIZERS.items()])
         
         if require_tracked_data:
             print('[Warn] specified normalizers require the storage of all training data. \
@@ -168,13 +169,13 @@ def main():
             PathLightDataset(temp_test_path, test_data, load=False) 
             
             # partial fit on train set when possible
-            if MIGNNConf.NORMALIZERS['x_node'] in ['Standard', 'MinMax'] and x_scaler is not None:
+            if MIGNNConf.NORMALIZERS['x_node'] in partial_fit_normalizers and x_scaler is not None:
                 x_scaler.partial_fit(intermediate_train_dataset.data.x)
             
-            if MIGNNConf.NORMALIZERS['x_edge'] in ['Standard', 'MinMax'] and edge_scaler is not None:
+            if MIGNNConf.NORMALIZERS['x_edge'] in partial_fit_normalizers and edge_scaler is not None:
                 edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
                 
-            if MIGNNConf.NORMALIZERS['y'] in ['Standard', 'MinMax'] and y_scaler is not None:
+            if MIGNNConf.NORMALIZERS['y'] in partial_fit_normalizers and y_scaler is not None:
                 y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
                 
             # reset train data list if necessary
@@ -191,13 +192,13 @@ def main():
             
             c_dataset, _ = PathLightDataset.collate(train_data)
             
-            if MIGNNConf.NORMALIZERS['x_node'] not in ['Standard', 'MinMax'] and x_scaler is not None:
+            if MIGNNConf.NORMALIZERS['x_node'] not in partial_fit_normalizers and x_scaler is not None:
                 x_scaler.fit(c_dataset.x)
             
-            if MIGNNConf.NORMALIZERS['x_edge'] not in ['Standard', 'MinMax'] and edge_scaler is not None:
+            if MIGNNConf.NORMALIZERS['x_edge'] not in partial_fit_normalizers and edge_scaler is not None:
                 edge_scaler.fit(c_dataset.edge_attr)
                 
-            if MIGNNConf.NORMALIZERS['y'] not in ['Standard', 'MinMax'] and y_scaler is not None:
+            if MIGNNConf.NORMALIZERS['y'] not in partial_fit_normalizers and y_scaler is not None:
                 y_scaler.fit(c_dataset.y.reshape(-1, 3))
             
         # save scalers
