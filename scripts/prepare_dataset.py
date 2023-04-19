@@ -40,6 +40,7 @@ def main():
 
     # Some MIGNN params 
     split_percent     = MIGNNConf.TRAINING_SPLIT
+    dataset_percent   = MIGNNConf.DATASET_PERCENT
     w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
     sensors_n_samples = MIGNNConf.VIEWPOINT_SAMPLES
 
@@ -131,7 +132,7 @@ def main():
         require_tracked_data = any([v not in partial_fit_normalizers + [None] for _, v in MIGNNConf.NORMALIZERS.items()])
         
         if require_tracked_data:
-            print('[Warn] specified normalizers require the storage of all training data. \
+            print('[Warning] specified normalizers require the storage of all training data. \
                 This can cause a memory surge.')
         
         for dataset_name in intermediate_datasets_path:
@@ -158,10 +159,14 @@ def main():
             
             # fill data
             for i in range(n_elements):
-                if i in train_indices:
-                    train_data.append(subset[i]) 
-                else: 
-                    test_data.append(subset[i])
+                
+                # keep or not current data
+                if random.random() <= dataset_percent:
+                    
+                    if i in train_indices:
+                        train_data.append(subset[i]) 
+                    else: 
+                        test_data.append(subset[i])
                     
             # save intermediate dataset
             intermediate_train_dataset = PathLightDataset(temp_train_path, train_data)
@@ -185,7 +190,7 @@ def main():
             # always clear test data
             test_data = []
             
-        print(f'[Information] dataset is composed of {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs})')    
+        print(f'[Information] managed {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs}). Only {dataset_percent*100:.2f}% of data (approximately) will be kept.')    
         
         # ensure normalization using scalers with no partial fit method
         if require_tracked_data:

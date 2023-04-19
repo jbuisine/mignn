@@ -37,6 +37,9 @@ NORMALIZERS           = {
     'x_edge': 'MinMax',
     'y': 'LogMinMax'
 } 
+# percentage of data to keep into train and test subsets (by default all)
+# usefull when images are in high resolution
+DATASET_PERCENT       = 1
 TRAINING_SPLIT        = 0.8
 BATCH_SIZE            = 128
 EPOCHS                = 100
