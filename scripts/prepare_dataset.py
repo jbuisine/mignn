@@ -223,7 +223,7 @@ def main():
     
     if MIGNNConf.ENCODING is not None:
         print('[Scaling (with encoding)] start preparing encoded scaled data...')
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
     else:
         print('[Scaling] start preparing scaled data...')
     applied_transforms = GeoT.Compose(transforms_list)    

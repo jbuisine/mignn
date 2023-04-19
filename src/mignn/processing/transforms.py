@@ -33,12 +33,14 @@ class ScalerTransform(BaseTransform):
 @functional_transform('signal_encoder')
 class SignalEncoder(BaseTransform):
 
-    def __init__(self, encoder_size=6, log_space=False):
+    def __init__(self, encoder_size=6, mask= None, log_space=False):
         
         # TODO: specify which data need to be transformed (check other transform)
         self.n_freqs = encoder_size
         self.log_space = log_space
-        self.embed_fns = [lambda x: x]
+        self.default = lambda x: x # keep default value of feature
+        self.embed_fns = []
+        self.mask = torch.tensor(mask, dtype=torch.uint8)
 
         # Define frequencies in either linear or log scale
         if self.log_space:
@@ -52,11 +54,19 @@ class SignalEncoder(BaseTransform):
             self.embed_fns.append(lambda x, freq=freq: torch.cos(x * freq))
             
     def __apply(self, x):
-        return torch.concat([fn(x) for fn in self.embed_fns], dim=-1)
+        
+        # apply transformation on mask if required
+        xx = x
+        if self.mask is not None:
+            if len(self.mask) != len(x):
+                raise ValueError(f'Invalid mask size. Mask size must be {len(x)}')
+            xx = x[self.mask]
+            
+        return torch.concat([fn(xx) for fn in self.embed_fns], dim=-1)
     
     def __call__(self, data: Data) -> Data:
-        
-        data.x = torch.stack([self.__apply(x) for x in data.x])
+            
+        data.x = torch.stack([ torch.cat([self.default(x), self.__apply(x) ]) for x in data.x])
 
         return data
     

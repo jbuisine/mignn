@@ -154,7 +154,7 @@ def main():
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING is not None:
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING))
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
 
     applied_transforms = GeoT.Compose(transforms_list)    
 

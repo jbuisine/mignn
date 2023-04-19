@@ -15,7 +15,9 @@ N_NODES_PER_GRAPHS    = 5
 N_NEIGHBORS           = 5
 
 # [Input data processing params]
+# k means (k x 2) additional features by feature (cos(2^k) + sin(2^k))
 ENCODING              = 6 # None means no encoding (by default signal encoding)
+MASK                  = [1, 1, 1, 1, 1, 1, 0, 0, 0]
 
 # [Dataset generation and performances params]
 # reduce memory usage while generating dataset
