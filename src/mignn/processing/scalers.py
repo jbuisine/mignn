@@ -8,22 +8,22 @@ class LogScaler(ABC):
         self._scaler = scaler
     
     def partial_fit(self, x):
-        x_log_based = np.log(x + np.finfo(np.float32).eps)
+        x_log_based = np.log(x + 1)
         self._scaler.partial_fit(x_log_based)
         return self
         
     def fit(self, X):
-        X_log_based = np.log(X + np.finfo(np.float32).eps)
+        X_log_based = np.log(X + 1)
         self._scaler.fit(X_log_based)
         return self
         
     def transform(self, X):
-        X_log_based = np.log(X + np.finfo(np.float32).eps)
+        X_log_based = np.log(X + 1)
         return self._scaler.transform(X_log_based)
         
     def inverse_transform(self, X):
         X_transformed = self._scaler.inverse_transform(X)
-        return np.exp(X_transformed) - np.finfo(np.float32).eps
+        return np.exp(X_transformed) - 1
     
     
 class LogMinMaxScaler(LogScaler):

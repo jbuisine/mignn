@@ -190,7 +190,7 @@ def main():
             # always clear test data
             test_data = []
             
-        print(f'[Information] managed {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs}). Only {dataset_percent*100:.2f}% of data (approximately) will be kept.')    
+        print(f'[Information] managed {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs}) ({dataset_percent*100:.2f}% of data (approximately) will be kept).')    
         
         # ensure normalization using scalers with no partial fit method
         if require_tracked_data:
