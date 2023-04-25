@@ -18,10 +18,16 @@ def main():
     SCENE_FILE = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/scene.xml'
     OUTPUT_DATA = os.path.join(f'{output_folder}', f'{MIGNNConf.SCENE_NAME}_' \
         f'IMG_{MIGNNConf.VIEWPOINT_SIZE[0]}_{MIGNNConf.VIEWPOINT_SIZE[1]}_' \
-        f'N{MIGNNConf.VIEWPOINT_SAMPLES}_' \
-        f'E{MIGNNConf.ENCODING}_' \
+        f'S-G_{MIGNNConf.GNN_SPP}_' \
+        f'N-G_{MIGNNConf.N_GRAPHS}_' \
+        f'N-NG_{MIGNNConf.N_NODES_PER_GRAPHS}_' \
+        f'N-NB_{MIGNNConf.N_NEIGHBORS}_' \
+        f'VS_{MIGNNConf.VIEWPOINT_SAMPLES}_' \
+        f'ENC_{MIGNNConf.ENCODING}_' \
         f'M-{"".join(list(map(str, MIGNNConf.MASK)))}_' \
-        f'D{MIGNNConf.MAX_DEPTH}_' \
+        f'D_{MIGNNConf.MAX_DEPTH}_' \
+        f'EP_{MIGNNConf.EPOCHS}_' \
+        f'BS_{MIGNNConf.BATCH_SIZE}_' \
         f'LOSS_{MIGNNConf.LOSS}_' \
         f'NORM_{scalers}')
     OUTPUT_PREDICT = f'{OUTPUT_DATA}_predict'
