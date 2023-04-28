@@ -40,7 +40,7 @@ class SignalEncoder(BaseTransform):
         self.log_space = log_space
         self.default = lambda x: x # keep default value of feature
         self.embed_fns = []
-        self.mask = torch.tensor(mask, dtype=torch.uint8)
+        self.mask = {k: torch.tensor(c_mask, dtype=torch.uint8) for k, c_mask in mask.items()} 
 
         # Define frequencies in either linear or log scale
         if self.log_space:
@@ -53,20 +53,22 @@ class SignalEncoder(BaseTransform):
             self.embed_fns.append(lambda x, freq=freq: torch.sin(x * freq))
             self.embed_fns.append(lambda x, freq=freq: torch.cos(x * freq))
             
-    def __apply(self, x):
+    def __apply(self, x, mask_key):
         
         # apply transformation on mask if required
         xx = x
-        if self.mask is not None:
-            if len(self.mask) != len(x):
-                raise ValueError(f'Invalid mask size. Mask size must be {len(x)}')
-            xx = x[self.mask]
+        if self.mask[mask_key] is not None:
+            if len(self.mask[mask_key]) != len(x):
+                raise ValueError(f'Invalid mask size for {mask_key}. Mask size must be {len(x)}')
+            xx = x[self.mask[mask_key]]
             
         return torch.concat([fn(xx) for fn in self.embed_fns], dim=-1)
     
     def __call__(self, data: Data) -> Data:
             
-        data.x = torch.stack([ torch.cat([self.default(x), self.__apply(x) ]) for x in data.x])
+        data.x = torch.stack([ torch.cat([self.default(x), self.__apply(x, 'x_node') ]) for x in data.x])
+        data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
+        data.y = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y') ]) for y in data.y])
 
         return data
     

@@ -24,7 +24,9 @@ def main():
         f'N-NB_{MIGNNConf.N_NEIGHBORS}_' \
         f'VS_{MIGNNConf.VIEWPOINT_SAMPLES}_' \
         f'ENC_{MIGNNConf.ENCODING}_' \
-        f'M-{"".join(list(map(str, MIGNNConf.MASK)))}_' \
+        f'MX-{"".join(list(map(str, MIGNNConf.MASK["x_node"])))}_' \
+        f'ME-{"".join(list(map(str, MIGNNConf.MASK["x_edge"])))}_' \
+        f'MY-{"".join(list(map(str, MIGNNConf.MASK["y"])))}_' \
         f'D_{MIGNNConf.MAX_DEPTH}_' \
         f'EP_{MIGNNConf.EPOCHS}_' \
         f'BS_{MIGNNConf.BATCH_SIZE}_' \
