@@ -142,7 +142,9 @@ def main():
             raise AttributeError('[Unsupported] specified normalizers require the storage of all training data. \
                 This can cause a memory surge.')
         
-        for dataset_name in intermediate_datasets_path:
+        n_intermediates_unscaled = len(intermediate_datasets_path)
+        
+        for idx, dataset_name in enumerate(intermediate_datasets_path):
                 
             c_dataset_path = os.path.join(output_temp, dataset_name)
             subset = PathLightDataset(root=c_dataset_path)
@@ -189,6 +191,8 @@ def main():
             
             # always clear test data
             test_data = []
+            
+            print(f'[Processing] fit scalers progress: {(idx + 1) / n_intermediates_unscaled * 100.:.2f}%', end='\r')
             
         print(f'[Information] managed {n_graphs} graphs (train: {int(n_train_graphs * dataset_percent)}, test: {(n_graphs - n_train_graphs) * dataset_percent}).')    
         
