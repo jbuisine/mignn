@@ -1,5 +1,6 @@
 import os
 import argparse
+import shutil
 import random
 import numpy as np
 from itertools import chain
@@ -74,6 +75,7 @@ def main():
     os.makedirs(output_temp_scaled, exist_ok=True)
 
     if not os.path.exists(scalers_folder):
+        
         print('[Data generation] start generating GNN data using Mistuba3')
         gnn_folders, ref_images, _ = prepare_data(scene_file,
                                     max_depth = MIGNNConf.MAX_DEPTH,
@@ -93,7 +95,7 @@ def main():
         output_temp_train = f'{output_folder}/train/temp/train'
         output_temp_test = f'{output_folder}/train/temp/test'
         
-        if not os.path.exists(output_temp_train) and not os.path.exists(output_scaled_temp_test):
+        if not os.path.exists(output_temp_train) and not os.path.exists(output_temp_test):
             pool_obj = ThreadPool()
 
             # load in parallel same scene file, imply error. Here we load multiple scenes
@@ -106,6 +108,13 @@ def main():
             build_containers = []
             for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
                 build_containers.append(result)
+                
+        # clear previous possible scaled data folders
+        if os.path.exists(output_temp_train):
+            shutil.rmtree(output_temp_train)
+        
+        if os.path.exists(output_temp_test):
+            shutil.rmtree(output_temp_test)
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
