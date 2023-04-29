@@ -90,18 +90,22 @@ def main():
         
         print('\n[Building connections] creating connections using Mistuba3')
         # multiprocess build of connections
-        pool_obj = ThreadPool()
+        output_temp_train = f'{output_folder}/train/temp/train'
+        output_temp_test = f'{output_folder}/train/temp/test'
+        
+        if not os.path.exists(output_temp_train) and not os.path.exists(output_scaled_temp_test):
+            pool_obj = ThreadPool()
 
-        # load in parallel same scene file, imply error. Here we load multiple scenes
-        params = list(zip(gnn_files,
-                    [ scene_file for _ in range(len(gnn_files)) ],
-                    [ output_temp for _ in range(len(gnn_files)) ],
-                    references
-                ))
+            # load in parallel same scene file, imply error. Here we load multiple scenes
+            params = list(zip(gnn_files,
+                        [ scene_file for _ in range(len(gnn_files)) ],
+                        [ output_temp for _ in range(len(gnn_files)) ],
+                        references
+                    ))
 
-        build_containers = []
-        for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
-            build_containers.append(result)
+            build_containers = []
+            for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
+                build_containers.append(result)
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
@@ -111,14 +115,11 @@ def main():
         
         # initialize scalers from config using manager 
         scalers = ScalersManager(config=MIGNNConf.NORMALIZERS)
-    
+        
         print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
         
         # prepare splitting of train and test dataset
-        output_temp_train = f'{output_folder}/train/temp/train'
         os.makedirs(output_temp_train, exist_ok=True)
-        
-        output_temp_test = f'{output_folder}/train/temp/test'
         os.makedirs(output_temp_test, exist_ok=True)
     
         # compute scalers using partial fit and respecting train dataset
@@ -180,7 +181,7 @@ def main():
             # always clear test data
             test_data = []
             
-        print(f'[Information] managed {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs}) ({dataset_percent*100:.2f}% of data (approximately) will be kept).')    
+        print(f'[Information] managed {n_graphs} graphs (train: {int(n_train_graphs * dataset_percent)}, test: {(n_graphs - n_train_graphs) * dataset_percent}).')    
         
         # For the moment we avoid total fit scalers and raise issue
         # ensure normalization using scalers with no partial fit method
