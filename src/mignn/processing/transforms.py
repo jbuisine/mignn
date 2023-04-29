@@ -3,26 +3,34 @@ from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.data.datapipes import functional_transform
 
+from .scalers import ScalersManager
 
 @functional_transform('scaler_transform')
 class ScalerTransform(BaseTransform):
 
-    def __init__(self, scalers):
-        self._x_scaler = scalers['x_node']
-        self._edge_scaler = scalers['x_edge']
-        self._y_scaler = scalers['y']
+    def __init__(self, scalers_manager: ScalersManager):
+        self._x_scalers = scalers_manager.get_scalers_from_field('x_node')
+        self._edge_scalers = scalers_manager.get_scalers_from_field('x_edge')
+        self._y_scalers = scalers_manager.get_scalers_from_field('y')
 
     def __call__(self, data: Data) -> Data:
         
-        # perform scale of data (if scaler exists)
-        if self._x_scaler is not None:
-            data.x = torch.tensor(self._x_scaler.transform(data.x), dtype=torch.float)
+        # perform scale of data (if scalers exists)
+        if self._x_scalers is not None:
+            for x_scaler in self._x_scalers:
+                data.x = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         
-        if self._edge_scaler is not None:
-            data.edge_attr = torch.tensor(self._edge_scaler.transform(data.edge_attr), dtype=torch.float)
+        if self._edge_scalers is not None:
+            for edge_scaler in self._edge_scalers:
+                data.edge_attr = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
         
-        if self._y_scaler is not None:
-            data.y = torch.tensor(self._y_scaler.transform(data.y.reshape(-1, 3)), dtype=torch.float)
+        if self._y_scalers is not None:
+            
+            # reshape `y` data
+            if len(data.y.shape) == 1:
+                data.y = data.y.unsqueeze(0)
+            for y_scaler in self._y_scalers:
+                data.y = torch.tensor(y_scaler.transform(data.y), dtype=torch.float)
 
         return data
     
@@ -61,11 +69,16 @@ class SignalEncoder(BaseTransform):
             if len(self.mask[mask_key]) != len(x):
                 raise ValueError(f'Invalid mask size for {mask_key}. Mask size must be {len(x)}')
             xx = x[self.mask[mask_key]]
+        
+        if self.mask[mask_key] is None or len(xx) == 0:
+            # if no mask, then apply nothing, just keep the previous field (same as mask of full zeros)
+            return torch.empty(0, dtype=torch.float32)
             
         return torch.concat([fn(xx) for fn in self.embed_fns], dim=-1)
     
     def __call__(self, data: Data) -> Data:
-            
+        
+        # transform if field using provided mask
         data.x = torch.stack([ torch.cat([self.default(x), self.__apply(x, 'x_node') ]) for x in data.x])
         data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
         data.y = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y') ]) for y in data.y])

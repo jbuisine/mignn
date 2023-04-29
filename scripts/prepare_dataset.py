@@ -18,10 +18,11 @@ from joblib import load as skload
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import prepare_data, merge_by_chunk, init_normalizer
+from utils import prepare_data, merge_by_chunk
 from utils import load_sensor_from, load_build_and_stack, scale_subset
 
 from mignn.processing import ScalerTransform, SignalEncoder
+from mignn.processing.scalers import ScalersManager
 
 import config as MIGNNConf
 
@@ -108,9 +109,8 @@ def main():
         intermediate_datasets_path = sorted(os.listdir(output_temp))
         random.shuffle(intermediate_datasets_path)
         
-        x_scaler = init_normalizer(MIGNNConf.NORMALIZERS['x_node'])
-        edge_scaler = init_normalizer(MIGNNConf.NORMALIZERS['x_edge'])
-        y_scaler = init_normalizer(MIGNNConf.NORMALIZERS['y'])
+        # initialize scalers from config using manager 
+        scalers = ScalersManager(config=MIGNNConf.NORMALIZERS)
     
         print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
         
@@ -128,11 +128,8 @@ def main():
         train_data = []
         test_data = []
         
-        partial_fit_normalizers = ['Standard', 'MinMax', 'LogStandard', 'LogMinMax']
-        require_tracked_data = any([v not in partial_fit_normalizers + [None] for _, v in MIGNNConf.NORMALIZERS.items()])
-        
-        if require_tracked_data:
-            print('[Warning] specified normalizers require the storage of all training data. \
+        if not scalers.enable_partial:
+            raise AttributeError('[Unsupported] specified normalizers require the storage of all training data. \
                 This can cause a memory surge.')
         
         for dataset_name in intermediate_datasets_path:
@@ -174,17 +171,10 @@ def main():
             PathLightDataset(temp_test_path, test_data, load=False) 
             
             # partial fit on train set when possible
-            if MIGNNConf.NORMALIZERS['x_node'] in partial_fit_normalizers and x_scaler is not None:
-                x_scaler.partial_fit(intermediate_train_dataset.data.x)
-            
-            if MIGNNConf.NORMALIZERS['x_edge'] in partial_fit_normalizers and edge_scaler is not None:
-                edge_scaler.partial_fit(intermediate_train_dataset.data.edge_attr)
-                
-            if MIGNNConf.NORMALIZERS['y'] in partial_fit_normalizers and y_scaler is not None:
-                y_scaler.partial_fit(intermediate_train_dataset.data.y.reshape(-1, 3))
+            scalers.partial_fit(intermediate_train_dataset)
                 
             # reset train data list if necessary
-            if not require_tracked_data:
+            if scalers.enable_partial:
                 train_data = []
             
             # always clear test data
@@ -192,38 +182,21 @@ def main():
             
         print(f'[Information] managed {n_graphs} graphs (train: {n_train_graphs}, test: {n_graphs - n_train_graphs}) ({dataset_percent*100:.2f}% of data (approximately) will be kept).')    
         
+        # For the moment we avoid total fit scalers and raise issue
         # ensure normalization using scalers with no partial fit method
-        if require_tracked_data:
+        if not scalers.enable_partial:
             
             c_dataset, _ = PathLightDataset.collate(train_data)
-            
-            if MIGNNConf.NORMALIZERS['x_node'] not in partial_fit_normalizers and x_scaler is not None:
-                x_scaler.fit(c_dataset.x)
-            
-            if MIGNNConf.NORMALIZERS['x_edge'] not in partial_fit_normalizers and edge_scaler is not None:
-                edge_scaler.fit(c_dataset.edge_attr)
-                
-            if MIGNNConf.NORMALIZERS['y'] not in partial_fit_normalizers and y_scaler is not None:
-                y_scaler.fit(c_dataset.y.reshape(-1, 3))
+            scalers.fit(c_dataset)
             
         # save scalers
         os.makedirs(scalers_folder, exist_ok=True)
         
-        skdump(x_scaler, f'{scalers_folder}/x_node_scaler.bin', compress=True)
-        skdump(edge_scaler, f'{scalers_folder}/x_edge_scaler.bin', compress=True)
-        skdump(y_scaler, f'{scalers_folder}/y_scaler.bin', compress=True)
+        skdump(scalers, f'{scalers_folder}/scalers.bin', compress=True)
 
-    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
-    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
-        
     # reload scalers    
-    scalers = {
-        'x_node': x_scaler,
-        'x_edge': edge_scaler,
-        'y': y_scaler
-    }
-    
+    scalers = skload(f'{scalers_folder}/scalers.bin')
+        
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING is not None:

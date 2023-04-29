@@ -7,7 +7,6 @@ import math
 import json
 
 import torch
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
@@ -17,7 +16,6 @@ import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
 
 from mignn.dataset import PathLightDataset
-from mignn.processing.scalers import LogStandardScaler, LogMinMaxScaler, LogRobustScaler
 
 import config as MIGNNConf
       
@@ -337,29 +335,5 @@ def init_loss(loss_name):
     
     if loss_name == 'Huber':
         return torch.nn.HuberLoss()
-    
-    return None
-
-def init_normalizer(normalizer_name):
-    """Get the expected sklearn normalizer
-    """
-    
-    if normalizer_name == 'MinMax':
-        return MinMaxScaler()
-
-    if normalizer_name == 'Robust':
-        return RobustScaler()
-    
-    if normalizer_name == 'Standard':
-        return StandardScaler()
-    
-    if normalizer_name == 'LogMinMax':
-        return LogMinMaxScaler()
-
-    if normalizer_name == 'LogRobust':
-        return LogRobustScaler()
-    
-    if normalizer_name == 'LogStandard':
-        return LogStandardScaler()
     
     return None

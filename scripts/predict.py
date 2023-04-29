@@ -139,18 +139,10 @@ def main():
         intermediate_scaled_datasets_path.append(result)
     
     print('[Processing] prepare chunked datasets for each viewpoint')
-    
-    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
-    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
-        
-    # reload scalers    
-    scalers = {
-        'x_node': x_scaler,
-        'x_edge': edge_scaler,
-        'y': y_scaler
-    }
-    
+
+    # reload scalers        
+    scalers = skload(f'{scalers_folder}/scalers.bin')            
+
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING is not None:
@@ -212,8 +204,10 @@ def main():
                 prediction = model(data.x, data.edge_attr, data.edge_index, batch=data.batch).detach().numpy()
                 
                 # only if scaler is enabled
-                if y_scaler is not None:
-                    prediction = y_scaler.inverse_transform(prediction)
+                # TODO: take care of encoded output! (cannot use mask when inverse transform)
+                # Radiance must be the 3 thirds features to predict
+                if scalers.get_scalers_from_field('y') is not None:
+                    prediction = scalers.inverse_transform_field('y', prediction)
                 
                 pixels.append(prediction)
 

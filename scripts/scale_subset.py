@@ -33,16 +33,8 @@ def main():
     c_scaled_dataset_path = os.path.join(output_folder, dataset_name)
 
     # create transforms from MIGNNConf
-    x_scaler = skload(f'{scalers_folder}/x_node_scaler.bin')
-    edge_scaler = skload(f'{scalers_folder}/x_edge_scaler.bin')
-    y_scaler = skload(f'{scalers_folder}/y_scaler.bin')
-
-    scalers = {
-        'x_node': x_scaler,
-        'x_edge': edge_scaler,
-        'y': y_scaler
-    }
-
+    scalers = skload(f'{scalers_folder}/scalers.bin')
+    
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING is not None:

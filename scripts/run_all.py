@@ -13,7 +13,7 @@ def main():
 
     output_folder = args.output
     
-    scalers = '-'.join([ str(v) for _, v in MIGNNConf.NORMALIZERS.items() ])
+    # scalers = '-'.join([ str(v) for _, v in MIGNNConf.NORMALIZERS.items() ])
 
     SCENE_FILE = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/scene.xml'
     OUTPUT_DATA = os.path.join(f'{output_folder}', f'{MIGNNConf.SCENE_NAME}_' \
@@ -30,8 +30,8 @@ def main():
         f'D_{MIGNNConf.MAX_DEPTH}_' \
         f'EP_{MIGNNConf.EPOCHS}_' \
         f'BS_{MIGNNConf.BATCH_SIZE}_' \
-        f'LOSS_{MIGNNConf.LOSS}_' \
-        f'NORM_{scalers}')
+        f'LOSS_{MIGNNConf.LOSS}')
+        # f'NORM_{scalers}')
     OUTPUT_PREDICT = f'{OUTPUT_DATA}_predict'
 
     TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'

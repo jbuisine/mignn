@@ -129,6 +129,9 @@ def main():
     # reload model if necessary
     start_epoch = 1
     
+    # save best only
+    current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
+    
     model_params_filename = f'{model_folder}/model.pt'
     optimizer_params_filename = f'{model_folder}/optimizer.pt'
     
@@ -139,12 +142,17 @@ def main():
         optimizer.load_state_dict(torch.load(optimizer_params_filename))
         
         train_metadata = json.load(open(f'{model_folder}/metadata', 'r', encoding='utf-8'))
-        start_epoch = int(train_metadata['epoch']) - 1
+        start_epoch = int(train_metadata['epoch'])
         start_epoch = 0 if start_epoch < 0 else start_epoch # ensure non negative epoch
+        
+        current_best_r2 = int(train_metadata['best_r2'])
+        
         print(f'[Information] load previous best saved model at epoch {start_epoch}')
-
-    # save best only
-    current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
+    
+    if start_epoch == n_epochs:
+        print('[Information] no need to futhermore train model')
+        return
+    
     for epoch in range(start_epoch, n_epochs + 1):
         train_loss, train_r2 = train(epoch, dataset_train_paths, train_n_batchs)
         # train_loss, train_r2 = test(dataset_train_paths, train_n_batchs)
@@ -158,7 +166,7 @@ def main():
             torch.save(optimizer.state_dict(), optimizer_params_filename)
             
         # save number of epochs done
-        metadata = { 'epoch': epoch }
+        metadata = { 'epoch': epoch, 'best_r2': test_r2 }
         with open(f'{model_folder}/metadata', 'w', encoding='utf-8') as outfile:
             json.dump(metadata, outfile)
             
