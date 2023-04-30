@@ -96,6 +96,11 @@ def main():
         output_temp_test = f'{output_folder}/train/temp/test'
         
         if not os.path.exists(output_temp_train) and not os.path.exists(output_temp_test):
+            
+            # clear previous potential generated data (clean way to generate)
+            if os.path.exists(output_temp):
+                shutil.rmtree(output_temp)
+            
             pool_obj = ThreadPool()
 
             # load in parallel same scene file, imply error. Here we load multiple scenes
