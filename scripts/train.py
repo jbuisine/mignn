@@ -17,10 +17,12 @@ import config as MIGNNConf
 def main():
 
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
-    parser.add_argument('--data', type=str, help="output folder where (same when preparing data)", required=True)
+    parser.add_argument('--dataset', type=str, help="output folder where (same when preparing data)", required=True)
+    parser.add_argument('--output', type=str, help="output model folder", required=True)
     
     args = parser.parse_args()
-    output_folder     = args.data
+    dataset_path     = args.dataset
+    output_folder     = args.output
 
     # Some MIGNN params
     n_epochs          = MIGNNConf.EPOCHS
@@ -32,20 +34,19 @@ def main():
     os.makedirs(model_folder, exist_ok=True)
     os.makedirs(stats_folder, exist_ok=True)
     
-    dataset_path = os.path.join(output_folder, 'train', 'datasets')
     print(f'[Loading] dataset from: `{dataset_path}`')
     
-    train_folder = f'{dataset_path}_train'
-    test_folder = f'{dataset_path}_test'
+    train_folder = f'{dataset_path}/data/train'
+    test_folder = f'{dataset_path}/data/test'
     
     # avoid metadata file
-    dataset_train_paths = [ os.path.join(train_folder, p) for p in os.listdir(f'{dataset_path}_train') \
+    dataset_train_paths = [ os.path.join(train_folder, p) for p in os.listdir(train_folder) \
                     if 'metadata' not in p ]
-    dataset_test_paths = [ os.path.join(test_folder, p) for p in os.listdir(f'{dataset_path}_test') \
+    dataset_test_paths = [ os.path.join(test_folder, p) for p in os.listdir(test_folder) \
                     if 'metadata' not in p ]
     
-    train_info = json.load(open(f'{dataset_path}_train/metadata', 'r', encoding='utf-8'))
-    test_info = json.load(open(f'{dataset_path}_test/metadata', 'r', encoding='utf-8'))
+    train_info = json.load(open(f'{dataset_path}/data/train/metadata', 'r', encoding='utf-8'))
+    test_info = json.load(open(f'{dataset_path}/data/test/metadata', 'r', encoding='utf-8'))
     
     train_n_batchs = int(train_info['n_batchs'])
     test_n_batchs = int(test_info['n_batchs'])
@@ -128,6 +129,7 @@ def main():
 
     # reload model if necessary
     start_epoch = 1
+    current_best_epoch = 1
     
     # save best only
     current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
@@ -146,8 +148,10 @@ def main():
         start_epoch = 0 if start_epoch < 0 else start_epoch # ensure non negative epoch
         
         current_best_r2 = int(train_metadata['best_r2'])
+        current_best_epoch = int(train_metadata['best_epoch'])
         
         print(f'[Information] load previous best saved model at epoch {start_epoch}')
+        print(f'[Information] model had R²: {current_best_r2} on test dataset (@epoch n°{current_best_r2})')
     
     if start_epoch == n_epochs:
         print('[Information] no need to futhermore train model')
@@ -166,7 +170,7 @@ def main():
             torch.save(optimizer.state_dict(), optimizer_params_filename)
             
         # save number of epochs done
-        metadata = { 'epoch': epoch, 'best_r2': test_r2 }
+        metadata = { 'epoch': epoch, 'best_r2': test_r2, 'best_epoch': current_best_epoch }
         with open(f'{model_folder}/metadata', 'w', encoding='utf-8') as outfile:
             json.dump(metadata, outfile)
             

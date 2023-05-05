@@ -23,35 +23,52 @@ def main():
         f'N-NG_{MIGNNConf.N_NODES_PER_GRAPHS}_' \
         f'N-NB_{MIGNNConf.N_NEIGHBORS}_' \
         f'VS_{MIGNNConf.VIEWPOINT_SAMPLES}_' \
-        f'ENC_{MIGNNConf.ENCODING}_' \
+        f'D_{MIGNNConf.MAX_DEPTH}')
+            
+    OUTPUT_DATASET = OUTPUT_DATA + \
+        f'_ENC_{MIGNNConf.ENCODING}_' \
         f'MX-{"".join(list(map(str, MIGNNConf.MASK["x_node"])))}_' \
         f'ME-{"".join(list(map(str, MIGNNConf.MASK["x_edge"])))}_' \
         f'MY-{"".join(list(map(str, MIGNNConf.MASK["y"])))}_' \
-        f'D_{MIGNNConf.MAX_DEPTH}_' \
         f'EP_{MIGNNConf.EPOCHS}_' \
         f'BS_{MIGNNConf.BATCH_SIZE}_' \
-        f'LOSS_{MIGNNConf.LOSS}')
+        f'LOSS_{MIGNNConf.LOSS}'
         # f'NORM_{scalers}')
-    OUTPUT_PREDICT = f'{OUTPUT_DATA}_predict'
+    
+    MODEL_FOLDER = f'{OUTPUT_DATASET}_model'
+        
+    OUTPUT_PREDICT = f'{OUTPUT_DATASET}_predict'
+    
+        # f'NORM_{scalers}')
 
     TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'
     TEST_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_test'
     
     print(f'[Information] results will be saved into: `{OUTPUT_DATA}`')    
-    # Run dataset generation
+    
+    # run data generation
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}',
-        'python', 'prepare_dataset.py',
+        'python', 'prepare_data.py',
         '--scene', SCENE_FILE,
         '--output', OUTPUT_DATA,
         '--sensors', TRAIN_VIEWPOINTS
+    ], check=True)
+    
+    # Run dataset generation
+    subprocess.run([
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}',
+        'python', 'generate_dataset.py',
+        '--data', f'{OUTPUT_DATA}/containers',
+        '--output', OUTPUT_DATASET,
     ], check=True)
     
     # Run train model
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}', 
         'python', 'train.py', 
-        '--data', OUTPUT_DATA 
+        '--dataset', f'{OUTPUT_DATASET}/datasets',
+        '--output', MODEL_FOLDER 
     ], check=True)
     
     # Run predictions from model
@@ -59,7 +76,7 @@ def main():
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_PREDICT}', 
         'python', 'predict.py', 
         '--scene', SCENE_FILE, 
-        '--model', f'{OUTPUT_DATA}/model', 
+        '--model', MODEL_FOLDER, 
         '--output', OUTPUT_PREDICT, 
         '--sensors', TEST_VIEWPOINTS
     ], check=True)
