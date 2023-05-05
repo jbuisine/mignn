@@ -42,16 +42,20 @@ def main():
 
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
+    parser.add_argument('--scalers', type=str, help="where to find data scalers", required=True)
     parser.add_argument('--model', type=str, help="where to find saved model", required=True)
     parser.add_argument('--output', type=str, help="output data folder", required=True)
+    parser.add_argument('--predictions', type=str, help="output predictions folder", required=True)
     parser.add_argument('--sensors', type=str, help="specific sensors folder", required=True)
     
     args = parser.parse_args()
 
-    scene_file        = args.scene
-    model_folder      = args.model
-    output_folder     = args.output
-    sensors_folder    = args.sensors
+    scene_file         = args.scene
+    scalers_folder     = args.scalers
+    model_folder       = args.model
+    output_folder      = args.output
+    predictions_folder = args.predictions
+    sensors_folder     = args.sensors
     
     # MIGNN param
     w_size, h_size    = MIGNNConf.PRED_VIEWPOINT_SIZE
@@ -85,61 +89,38 @@ def main():
                             sort_chunks=True)
 
     output_temp = f'{output_folder}/datasets/temp/'
-    os.makedirs(output_temp, exist_ok=True)
-    
     output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
-    os.makedirs(output_temp_scaled, exist_ok=True)
-
-    # manage for each viewpoint
-    params = list(chain.from_iterable([ 
-                [ 
-                    (
-                        os.path.join(folder, g_file),
-                        scene_file,
-                        os.path.join(output_temp, viewpoints[f_i]),
-                        ref_images[f_i]
-                    )
-                    # need to sort file in order to preserve pixels order
-                    for g_file in sorted(os.listdir(folder)) 
-                ] 
-                for f_i, folder in enumerate(gnn_folders)
-            ]))
     
-    print('\n[Building connections] creating connections using Mistuba3')
-    # multiprocess build of connections
-    pool_obj = ThreadPool()
+    if not os.path.exists(output_temp):
+    
+        os.makedirs(output_temp, exist_ok=True)
 
-    build_containers = []
-    for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
-        build_containers.append(result)
+        # manage for each viewpoint
+        params = list(chain.from_iterable([ 
+                    [ 
+                        (
+                            os.path.join(folder, g_file),
+                            scene_file,
+                            os.path.join(output_temp, viewpoints[f_i]),
+                            ref_images[f_i]
+                        )
+                        # need to sort file in order to preserve pixels order
+                        for g_file in sorted(os.listdir(folder)) 
+                    ] 
+                    for f_i, folder in enumerate(gnn_folders)
+                ]))
         
+        print('\n[Building connections] creating connections using Mistuba3')
+        # multiprocess build of connections
+        pool_obj = ThreadPool()
+
+        build_containers = []
+        for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
+            build_containers.append(result)
+            
         
     print('[Processing] scaling all subsets using saved model scalers')
-    # specify where to find each subsets    
-    scalers_folder = f'{model_folder}/scalers'
-
-    scaled_params = list(chain.from_iterable([ 
-            [ 
-                (
-                    os.path.join(output_temp, v_name, v_subset), 
-                    scalers_folder,
-                    os.path.join(output_temp_scaled, v_name)
-                )
-                # need to sort file in order to preserve pixels order
-                for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name))) 
-            ] 
-            for v_name in viewpoints
-        ]))
     
-    # multi-process scale of dataset
-    pool_obj_scaled = ThreadPool()
-
-    intermediate_scaled_datasets_path = []
-    for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
-        intermediate_scaled_datasets_path.append(result)
-    
-    print('[Processing] prepare chunked datasets for each viewpoint')
-
     # reload scalers        
     scalers = skload(f'{scalers_folder}/scalers.bin')            
 
@@ -151,6 +132,31 @@ def main():
     applied_transforms = GeoT.Compose(transforms_list)    
 
     
+    if not os.path.exists(output_temp_scaled):
+        os.makedirs(output_temp_scaled, exist_ok=True)
+
+        scaled_params = list(chain.from_iterable([ 
+                [ 
+                    (
+                        os.path.join(output_temp, v_name, v_subset), 
+                        scalers_folder,
+                        os.path.join(output_temp_scaled, v_name)
+                    )
+                    # need to sort file in order to preserve pixels order
+                    for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name))) 
+                ] 
+                for v_name in viewpoints
+            ]))
+        
+        # multi-process scale of dataset
+        pool_obj_scaled = ThreadPool()
+
+        intermediate_scaled_datasets_path = []
+        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
+            intermediate_scaled_datasets_path.append(result)
+        
+    print('[Processing] prepare chunked datasets for each viewpoint')
+
     datasets_path = []
     for v_i, viewpoint in enumerate(viewpoints):
         
@@ -160,13 +166,15 @@ def main():
         c_output_folder = f'{output_folder}/datasets/{viewpoint}_chunks'
         
         # chunk subsets
-        merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
+        if not os.path.exists(c_output_folder):
+            merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
         
         datasets_path.append(c_output_folder)
-      
-    print('[Cleaning] clear intermediated saved containers')
-    os.system(f'rm -r {output_temp}')
-    os.system(f'rm -r {output_temp_scaled}')
+    
+#print('[Cleaning] clear intermediated saved containers')
+    #os.system(f'rm -r {output_temp}')
+    #os.system(f'rm -r {output_temp_scaled}')
+    os.makedirs(predictions_folder, exist_ok=True)
     
     for v_i, sensor in enumerate(sensors):
 
@@ -216,17 +224,17 @@ def main():
 
         image = np.array(pixels).reshape((h_size, w_size, 3))
 
-        os.makedirs(f'{output_folder}/low_res', exist_ok=True)
-        low_image_path = f'{output_folder}/low_res/{viewpoint_name}.exr'
+        os.makedirs(f'{predictions_folder}/low_res', exist_ok=True)
+        low_image_path = f'{predictions_folder}/low_res/{viewpoint_name}.exr'
         cv2.imwrite(low_image_path, v_low_image)
 
-        os.makedirs(f'{output_folder}/predictions', exist_ok=True)
-        image_path = f'{output_folder}/predictions/{viewpoint_name}.exr'
+        os.makedirs(f'{predictions_folder}/predictions', exist_ok=True)
+        image_path = f'{predictions_folder}/predictions/{viewpoint_name}.exr'
         cv2.imwrite(image_path, image)
         print(f' -- Predicted image has been saved into: {image_path}')
 
-        os.makedirs(f'{output_folder}/references', exist_ok=True)
-        ref_image_path = f'{output_folder}/references/{viewpoint_name}.exr'
+        os.makedirs(f'{predictions_folder}/references', exist_ok=True)
+        ref_image_path = f'{predictions_folder}/references/{viewpoint_name}.exr'
         cv2.imwrite(ref_image_path, v_ref_image)
         print(f' -- Reference image has been saved into: {ref_image_path}')
 
@@ -274,8 +282,8 @@ def main():
         axs[p_i, 2].set_title(f'Reference ({viewpoint_name})')
         axs[p_i, 2].axis('off')
 
-    print(f'[Information] pdf report saved into `{output_folder}`')
-    plt.savefig(f'{output_folder}/report.pdf')
+    print(f'[Information] pdf report saved into `{predictions_folder}`')
+    plt.savefig(f'{predictions_folder}/report.pdf')
 
 if __name__ == "__main__":
     main()

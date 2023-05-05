@@ -147,11 +147,11 @@ def main():
         start_epoch = int(train_metadata['epoch'])
         start_epoch = 0 if start_epoch < 0 else start_epoch # ensure non negative epoch
         
-        current_best_r2 = int(train_metadata['best_r2'])
+        current_best_r2 = float(train_metadata['best_r2'])
         current_best_epoch = int(train_metadata['best_epoch'])
         
         print(f'[Information] load previous best saved model at epoch {start_epoch}')
-        print(f'[Information] model had R²: {current_best_r2} on test dataset (@epoch n°{current_best_r2})')
+        print(f'[Information] model had R²: {current_best_r2} on test dataset (@epoch n°{current_best_epoch})')
     
     if start_epoch == n_epochs:
         print('[Information] no need to futhermore train model')

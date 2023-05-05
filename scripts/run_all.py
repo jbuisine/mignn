@@ -8,10 +8,12 @@ def main():
     
     parser = argparse.ArgumentParser(description="Run all: dataset creation, train and predict (based on the config file)")
     parser.add_argument('--output', type=str, help="folder where to save data", required=True)
+    parser.add_argument('--predictions', type=str, help="folder where to save predictions images/analysis", required=True)
 
     args = parser.parse_args()
 
-    output_folder = args.output
+    output_folder      = args.output
+    predictions_folder = args.predictions
     
     # scalers = '-'.join([ str(v) for _, v in MIGNNConf.NORMALIZERS.items() ])
 
@@ -76,8 +78,10 @@ def main():
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_PREDICT}', 
         'python', 'predict.py', 
         '--scene', SCENE_FILE, 
-        '--model', MODEL_FOLDER, 
-        '--output', OUTPUT_PREDICT, 
+        '--scalers', f'{OUTPUT_DATASET}/datasets/scalers',
+        '--model', f'{MODEL_FOLDER}/model', 
+        '--output', OUTPUT_PREDICT,
+        '--predictions', predictions_folder, 
         '--sensors', TEST_VIEWPOINTS
     ], check=True)
 
