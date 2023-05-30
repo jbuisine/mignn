@@ -80,45 +80,16 @@ def main():
     references = []
     low_res_images = []
 
-    gnn_folders, ref_images, low_images = prepare_data(scene_file,
-                            max_depth = MIGNNConf.MAX_DEPTH,
-                            data_spp = MIGNNConf.GNN_SPP,
-                            ref_spp = MIGNNConf.REF_SPP,
-                            sensors = sensors,
-                            output_folder = f'{output_folder}/generated',
-                            sort_chunks=True)
+    gnn_folders = prepare_data(scene_file,
+                max_depth = MIGNNConf.MAX_DEPTH,
+                data_spp = MIGNNConf.GNN_SPP,
+                ref_spp = MIGNNConf.REF_SPP,
+                sensors = sensors,
+                output_folder = f'{output_folder}/generated',
+                sort_chunks=True)
 
-    output_temp = f'{output_folder}/datasets/temp/'
     output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
-    
-    if not os.path.exists(output_temp):
-    
-        os.makedirs(output_temp, exist_ok=True)
-
-        # manage for each viewpoint
-        params = list(chain.from_iterable([ 
-                    [ 
-                        (
-                            os.path.join(folder, g_file),
-                            scene_file,
-                            os.path.join(output_temp, viewpoints[f_i]),
-                            ref_images[f_i]
-                        )
-                        # need to sort file in order to preserve pixels order
-                        for g_file in sorted(os.listdir(folder)) 
-                    ] 
-                    for f_i, folder in enumerate(gnn_folders)
-                ]))
-        
-        print('\n[Building connections] creating connections using Mistuba3')
-        # multiprocess build of connections
-        pool_obj = ThreadPool()
-
-        build_containers = []
-        for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
-            build_containers.append(result)
             
-        
     print('[Processing] scaling all subsets using saved model scalers')
     
     # reload scalers        
@@ -138,14 +109,14 @@ def main():
         scaled_params = list(chain.from_iterable([ 
                 [ 
                     (
-                        os.path.join(output_temp, v_name, v_subset), 
+                        os.path.join(gnn_folders[v_i], v_name, v_subset), 
                         scalers_folder,
                         os.path.join(output_temp_scaled, v_name)
                     )
                     # need to sort file in order to preserve pixels order
-                    for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name))) 
+                    for v_subset in sorted(os.listdir(os.path.join(gnn_folders[v_i], v_name))) 
                 ] 
-                for v_name in viewpoints
+                for v_i, v_name in enumerate(viewpoints)
             ]))
         
         # multi-process scale of dataset
@@ -180,8 +151,6 @@ def main():
 
         dataset_path = datasets_path[v_i]
         viewpoint_name = viewpoints[v_i]
-        v_ref_image = np.asarray(cv2.imread(ref_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
-        v_low_image = np.asarray(cv2.imread(low_images[v_i], cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH))
 
         print(f'[Prediction for viewpoint n°{v_i}: {viewpoint_name}]')
 
@@ -198,7 +167,9 @@ def main():
         model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
         model.eval()
         
-        pixels = []
+        pred_image = np.empty((h_size, w_size, 3))
+        target_image = np.empty((h_size, w_size, 3))
+        input_image = np.empty((h_size, w_size, 3))
 
         n_predict = 0
         n_predictions = int(dataset_info["n_samples"])
@@ -217,25 +188,26 @@ def main():
                 if scalers.get_scalers_from_field('y') is not None:
                     prediction = scalers.inverse_transform_field('y', prediction)
                 
-                pixels.append(prediction)
+                h, w = data.pixel
+                pred_image[h, w] = prediction
+                target_image[h, w] = data.y.detach().numpy()
+                input_image[h, w] = data.x[MIGNNConf.INPUT_RADIANCE].detach().numpy()
 
                 print(f' -- Prediction progress: {(n_predict + 1) / n_predictions * 100.:.2f}%', end='\r')
                 n_predict += 1
 
-        image = np.array(pixels).reshape((h_size, w_size, 3))
-
         os.makedirs(f'{predictions_folder}/low_res', exist_ok=True)
         low_image_path = f'{predictions_folder}/low_res/{viewpoint_name}.exr'
-        cv2.imwrite(low_image_path, v_low_image)
+        cv2.imwrite(low_image_path, input_image)
 
         os.makedirs(f'{predictions_folder}/predictions', exist_ok=True)
         image_path = f'{predictions_folder}/predictions/{viewpoint_name}.exr'
-        cv2.imwrite(image_path, image)
+        cv2.imwrite(image_path, pred_image)
         print(f' -- Predicted image has been saved into: {image_path}')
 
         os.makedirs(f'{predictions_folder}/references', exist_ok=True)
         ref_image_path = f'{predictions_folder}/references/{viewpoint_name}.exr'
-        cv2.imwrite(ref_image_path, v_ref_image)
+        cv2.imwrite(ref_image_path, target_image)
         print(f' -- Reference image has been saved into: {ref_image_path}')
 
         predictions.append(image_path)

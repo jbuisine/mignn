@@ -1,8 +1,6 @@
 import os
 import argparse
 import shutil
-import random
-import numpy as np
 from itertools import chain
 
 import mitsuba as mi
@@ -12,7 +10,7 @@ import tqdm
 from multiprocessing.pool import ThreadPool
 
 from utils import prepare_data
-from utils import load_sensor_from, load_build_and_stack
+from utils import load_sensor_from, load_and_save
 
 
 import config as MIGNNConf
@@ -40,7 +38,12 @@ def main():
     for file in sorted(os.listdir(sensors_folder)):
         file_path = os.path.join(sensors_folder, file)
 
-        sensor = load_sensor_from((w_size, h_size), file_path)
+        sensor = load_sensor_from((w_size, h_size), 
+                                  sensor_file=file_path,
+                                  integrator=MIGNNConf.INTEGRATOR, 
+                                  gnn_until=MIGNNConf.GNN_SPP, 
+                                  gnn_nodes=MIGNNConf.N_NODES_PER_GRAPHS, 
+                                  gnn_neighbors=MIGNNConf.N_NEIGHBORS)
 
         # Use a number of times the same sensors in order to increase knowledge
         # Multiple GNN files will be generated
@@ -49,46 +52,46 @@ def main():
 
     # multiple datasets to avoid memory overhead
     output_gnn_data = f'{output_folder}/containers'
-
-    if not os.path.exists(output_gnn_data):
-        
-        os.makedirs(output_gnn_data, exist_ok=True)
+    output_rendering_data = f'{output_folder}/rendering'
+    
+    if not os.path.exists(output_rendering_data):
         
         print('[Data generation] start generating GNN data using Mistuba3')
-        gnn_folders, ref_images, _ = prepare_data(scene_file,
+        gnn_folders = prepare_data(scene_file,
+                                    integrator = MIGNNConf.INTEGRATOR,
                                     max_depth = MIGNNConf.MAX_DEPTH,
-                                    data_spp = MIGNNConf.GNN_SPP,
                                     ref_spp = MIGNNConf.REF_SPP,
                                     sensors = sensors,
                                     output_folder = f'{output_folder}/rendering')
-
-        # associate for each file in gnn_folder, the correct reference image
-        gnn_files, references = list(zip(*list(chain.from_iterable(list([ 
-                        [ (os.path.join(folder, g_file), ref_images[f_i]) for g_file in os.listdir(folder) ] 
-                        for f_i, folder in enumerate(gnn_folders) 
-                    ])))))
         
         print('\n[Building connections] creating connections using Mistuba3')
         
+    if not os.path.exists(output_gnn_data):
+        
+        gnn_folders = [ os.path.join(output_rendering_data, folder) for folder in os.listdir(output_rendering_data) ]
+
         # clear previous potential generated data (clean way to generate)
         if os.path.exists(output_gnn_data):
             shutil.rmtree(output_gnn_data)
         
         pool_obj = ThreadPool()
 
+        gnn_files = list(chain(*list([
+                [ os.path.join(folder, g_file) for g_file in os.listdir(folder) ] 
+                for folder in gnn_folders 
+            ])))
+        
         # load in parallel same scene file, imply error. Here we load multiple scenes
         params = list(zip(gnn_files,
-                    [ scene_file for _ in range(len(gnn_files)) ],
                     [ output_gnn_data for _ in range(len(gnn_files)) ],
-                    references
                 ))
 
         build_containers = []
-        for result in tqdm.tqdm(pool_obj.imap(load_build_and_stack, params), total=len(params)):
+        for result in tqdm.tqdm(pool_obj.imap(load_and_save, params), total=len(params)):
             build_containers.append(result)
     
     else:
-        print('[Data generation] GNN data already available')
- 
+        print('[Data generation] data already generated')
+
 if __name__ == "__main__":
     main()

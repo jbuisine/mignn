@@ -3,25 +3,28 @@
 # scene store into `../notebooks/scenes`
 # Must be composed of `viewpoints` and `viewpoints_test` folders
 SCENE_NAME            = "teapot-double" 
-REF_SPP               = 10000
-GNN_SPP               = 10
+INTEGRATOR            = "pathgnn"
+REF_SPP               = 1000
+GNN_SPP               = 20
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 16, 16
+VIEWPOINT_SIZE        = 400, 400
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]
-N_GRAPHS              = 10
-N_NODES_PER_GRAPHS    = 5
-N_NEIGHBORS           = 5
+N_NODES_PER_GRAPHS    = 10
+N_NEIGHBORS           = 10
 
 # [Input data processing params]
 # k means (k x 2) additional features by feature (cos(2^k) + sin(2^k))
 ENCODING              = 6 # None means no encoding (by default signal encoding)
 MASK                  = {
-    'x_node': [1, 1, 1, 1, 1, 1, 0, 0, 0],
+    'x_node': [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
     'x_edge': [1],
     'y': [0, 0, 0]
 }
+
+# specify the `x_node` input radiance fields (if exists)
+INPUT_RADIANCE = [0, 0, 0, 0, 0, 0, 1, 1, 1, 0]
 
 # [Dataset generation and performances params]
 # reduce memory usage while generating dataset
@@ -39,8 +42,8 @@ LOSS                  = 'MSE' # MSE, Huber, MAE are supported
 # Use of scalers for specific fields
 NORMALIZERS           = {
     'x_node': {
-        'MinMax': [1, 1, 1, 0, 0, 0, 0, 0, 0],
-        'Standard': [0, 0, 0, 0, 0, 0, 1, 1, 1]
+        'MinMax': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        'Standard': [0, 0, 0, 0, 0, 0, 1, 1, 1, 0]
     },
     'x_edge': {
         'MinMax': [1]
@@ -61,4 +64,4 @@ EPOCHS                = 20
 HIDDEN_CHANNELS       = 256
 
 # [Predictions params]
-PRED_VIEWPOINT_SIZE   = 64, 64
+PRED_VIEWPOINT_SIZE   = 100, 100

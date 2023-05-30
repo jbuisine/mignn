@@ -8,7 +8,7 @@ MiGNN is a library for processing light paths and composing graphs. The idea of 
 
 This project depends on Mitsuba3 renderer. First, clone the specific mitsuba version for light paths extraction:
 ```
-git clone --resursive -b gnn https://github.com/Artisis-ULCO/mitsuba3.git
+git clone --resursive -b gnn-integrator https://github.com/Artisis-ULCO/mitsuba3.git
 ```
 
 **Note:** before compiling project ensure you are in your prefered Python environnement (virtual or specific Python version). Mitsuba Python binder will be associated to this specific Python version.

@@ -19,8 +19,8 @@ from joblib import load as skload
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import prepare_data, merge_by_chunk
-from utils import load_sensor_from, load_build_and_stack, scale_subset
+from utils import merge_by_chunk
+from utils import scale_subset
 
 from mignn.processing import ScalerTransform, SignalEncoder
 from mignn.processing.scalers import ScalersManager

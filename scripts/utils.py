@@ -2,11 +2,11 @@
 """
 import os
 import numpy as np
-import sys
 import math
 import json
-
+import msgpack
 import torch
+from torch_geometric.data import Data
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
@@ -19,84 +19,43 @@ from mignn.dataset import PathLightDataset
 
 import config as MIGNNConf
       
-def chunk_file(filename, output_folder, chunk_memory_size, sort_chunks=False):
-    
-    if MIGNNConf.SCENE_REVERSE:
-        extract_key = lambda x: tuple(map(int, x.split(';')[0].split(',')))[::-1]
-    else:
-        extract_key = lambda x: tuple(map(int, x.split(';')[0].split(',')))
-    
-    with open(filename, 'r', encoding='utf-8') as f_gnn:
-        rows = f_gnn.readlines()
+def load_and_convert(filename):
+    #global done
+    graphs = []
+    with open(filename, 'rb') as f:
+        data = msgpack.unpackb(f.read(), raw=False)
         
-        keys_and_rows = [ (extract_key(row), row) for row in rows ]
-        pixels_rows = {}
-        for k, row in keys_and_rows: 
-            if k not in pixels_rows:
-                pixels_rows[k] = []
-            pixels_rows[k].append(row)
-        
-    # not need sort keys
-    # chunk_rows = [list(res)[i: i + chunk_size] for i in range(0, len(res.keys()), chunk_size)]
-    
-    # TODO: if necessary to do conv, it is there
-    # manage chunk using memory in Mo
-    chunk_in_bytes = chunk_memory_size * (1024 ** 2)
-    chunk_rows = []
-    
-    current_chunk = []
-    memory_sum = 0
-    
-    # enable of not sorted keys (could be necessary when predicting)
-    if sort_chunks:
-        # TODO: use of ordered generated keys
-        pixels_items = sorted(pixels_rows.items())
-    else:
-        pixels_items = pixels_rows.items()    
-    
-    # create chunks
-    for key, rows in pixels_items:
-        
-        c_memory_bytes = sum(sys.getsizeof(line) for line in rows)
-        memory_sum += c_memory_bytes
-        
-        if c_memory_bytes > chunk_in_bytes:
-            raise ValueError(f'Cannot save information using only {chunk_memory_size} Mo \
-                when generating GNN files')
+        # for each key data, extract graph
+        for key, k_data in data.items():
             
-        # create new chunk
-        if memory_sum > chunk_in_bytes:
-            chunk_rows.append(current_chunk)
-            memory_sum = 0
-            current_chunk = []
+            pixel = list(map(int, key.split(',')))
             
-        current_chunk.append(key)
-        
-    # last save if needed
-    if len(current_chunk) > 0:
-        chunk_rows.append(current_chunk)
+            # nodes data
+            x_node = torch.tensor(k_data["x"], dtype=torch.float)
+            x_node_pos = torch.tensor(k_data["pos"], dtype=torch.float)
+            x_node_primary = torch.tensor(k_data["x_primary"], dtype=torch.bool)
+            
+            # edges data
+            edge_index = torch.tensor(k_data["edge_index"], dtype=torch.long)    
+            edge_attr = torch.tensor(k_data["edge_attr"], dtype=torch.float)
+            edge_built = torch.tensor(k_data["edge_built"], dtype=torch.bool)
+            
+            # targets
+            y_targets = torch.tensor(k_data["y"], dtype=torch.float)
+            
+            graph_data = Data(x=x_node, 
+                            x_primary=x_node_primary, 
+                            pos=x_node_pos,
+                            edge_index=edge_index.t().contiguous(), 
+                            edge_attr=edge_attr,
+                            edge_built=edge_built, 
+                            y=y_targets, 
+                            pixel=pixel)
+            graphs.append(graph_data)
     
-    # for i, chunk_keys in enumerate(chunks_dict(sorted(res), chunk_size)):
-    for i, chunk_keys in enumerate(chunk_rows):
-        
-        _, folder_name = os.path.split(output_folder)
-        
-        # add specific index
-        i_str = str(i)
-        while len(i_str) < 5: 
-            i_str = f'0{i_str}'
-        
-        filename = f'{folder_name}_{i_str}.path'
-        with open(f'{os.path.join(output_folder, filename)}', 'w', encoding='utf-8') as f_output:
-            
-            # write row for current chunk keys
-            for key in chunk_keys:
-                pixel_rows = pixels_rows[key]
-                for row in pixel_rows:
-                    f_output.write(row)
-            
+    return graphs
 
-def load_sensor_from(img_size, sensor_file):
+def load_sensor_from(img_size, sensor_file, integrator, gnn_until, gnn_nodes, gnn_neighbors):
     """Build a new mitsuba sensor from perspective camera information
     """
 
@@ -130,81 +89,56 @@ def load_sensor_from(img_size, sensor_file):
                 'type': 'tent',
             },
             'pixel_format': 'rgb',
+            'gnn_integrator_type': integrator,
+            'gnn_until': gnn_until,
+            'gnn_nodes': gnn_nodes,
+            'gnn_neighbors': gnn_neighbors
         },
     })
 
-def prepare_data(scene_file, max_depth, data_spp, ref_spp, sensors, output_folder, sort_chunks=False):
+def prepare_data(scene_file, integrator, max_depth, ref_spp, sensors, output_folder):
     """Enable to extract GNN data from `pathgnn` integrator and associated reference
     """
     os.makedirs(output_folder, exist_ok=True)
 
     scene = mi.load_file(scene_file)
 
-    ref_integrator = mi.load_dict({'type': 'path', 'max_depth': max_depth})
-    gnn_integrator = mi.load_dict({'type': 'pathgnn', 'max_depth': max_depth})
+    gnn_integrator = mi.load_dict({'type': integrator, 'max_depth': max_depth})
 
     # generate gnn file data and references
-    ref_images = []
-    low_images = []
     output_gnn_folders = []
 
     print(f'Generation of {len(sensors)} views for `{scene_file}`')
     for view_i, sensor in enumerate(sensors):
 
-        ref_image_path = f'{output_folder}/ref_{view_i}.exr'
-
-        if not os.path.exists(ref_image_path):
-            # print(f'Generating data for view n°{view_i+1}')
-            ref_image = mi.render(scene, spp=ref_spp, integrator=ref_integrator, sensor=sensor)
-
-            # save image as exr and reload it using cv2
-            cv2.imwrite(ref_image_path, np.asarray(ref_image))
-
-        ref_images.append(ref_image_path)
-
-        # print(f' -- reference of view n°{view_i+1} generated...')
+        gnn_log_folder = f'{output_folder}/gnn_folder_{view_i}'
+        
         params = mi.traverse(scene)
-        gnn_log_filename = f'{output_folder}/gnn_file_{view_i}.path'
-        low_image_path = f'{output_folder}/low_{view_i}.exr'
-        params['logfile'] = gnn_log_filename
+        params['output_gnn'] = gnn_log_folder
         params.update();
-
-        # split data into multiple files (better to later load data)
-        gnn_log_folder = f'{output_folder}/gnn_file_{view_i}'
         
         if not os.path.exists(gnn_log_folder):
-            low_image = mi.render(scene, spp=data_spp, integrator=gnn_integrator, sensor=sensor)
-    
-            cv2.imwrite(low_image_path, np.asarray(low_image))
-        
-            # now split file into multiple ones (except when predict)
-            os.makedirs(gnn_log_folder, exist_ok=True)
-        
-            # need to chunk file by pixels keys
-            chunk_file(gnn_log_filename, gnn_log_folder, MIGNNConf.VIEWPOINT_CHUNK, sort_chunks)
-            
-            # now remove initial log file
-            os.system(f'rm {gnn_log_filename}')
-                
+            # print(f'Generating data for view n°{view_i+1}')
+            mi.render(scene, spp=ref_spp, integrator=gnn_integrator, sensor=sensor)
+
+        # print(f' -- reference of view n°{view_i+1} generated...')
+  
         print(f'[Data generation] GNN data progress: {(view_i+1) / len(sensors) * 100:.2f}%', end='\r')
 
-        low_images.append(low_image_path)
         output_gnn_folders.append(gnn_log_folder)
 
-    return output_gnn_folders, ref_images, low_images
+    return output_gnn_folders
 
 
-def load_build_and_stack(params):
+def load_and_save(params):
 
-    gnn_file, scene_file, output_temp, ref_image_path = params
+    gnn_file, output_temp = params
 
     # [Important] this task cannot be done by multiprocess, need to be done externaly
     # Mitsuba seems to be concurrent package inside same context program
 
-    process = subprocess.Popen(["python", "load_build_and_stack.py", \
+    process = subprocess.Popen(["python", "load_and_save.py", \
         "--gnn_file", gnn_file, \
-        "--scene", scene_file, \
-        "--reference", ref_image_path, \
         "--output", output_temp])
     process.wait()
 

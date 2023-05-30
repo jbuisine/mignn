@@ -4,6 +4,7 @@
 	<default name="resy" value="720" />
 	<default name="resx" value="1280" />
 	<default name="max_depth" value="5" />
+	<string name="output_gnn" value="output_gnn"/>
 	<integrator type="$integrator">
 		<integer name="max_depth" value="$max_depth" />
 	</integrator>
@@ -14,6 +15,7 @@
 		</transform>
 		<sampler type="independent">
 			<integer name="sample_count" value="$spp" />
+			<integer name="block_size" value="64" />
 		</sampler>
 		<film type="hdrfilm">
 			<integer name="width" value="$resx" />
