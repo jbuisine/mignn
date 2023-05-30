@@ -7,7 +7,7 @@ INTEGRATOR            = "pathgnn"
 REF_SPP               = 1000
 GNN_SPP               = 20
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 400, 400
+VIEWPOINT_SIZE        = 100, 100
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]

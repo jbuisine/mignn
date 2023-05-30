@@ -28,7 +28,7 @@ def load_and_convert(filename):
         # for each key data, extract graph
         for key, k_data in data.items():
             
-            pixel = list(map(int, key.split(',')))
+            pixel = torch.tensor(list(map(int, key.split(','))), dtype=torch.int32)
             
             # nodes data
             x_node = torch.tensor(k_data["x"], dtype=torch.float)
@@ -193,6 +193,7 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
             
             # get current data memory size
             memory_object = sum([v.element_size() * v.numel() for k, v in data])
+
             memory_sum += memory_object
                     
             # need to store into intermediate dataset

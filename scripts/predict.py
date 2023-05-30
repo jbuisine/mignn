@@ -19,7 +19,7 @@ from joblib import load as skload
 from models.gcn_model import GNNL
 
 from utils import prepare_data, scale_subset, merge_by_chunk
-from utils import load_sensor_from, load_build_and_stack
+from utils import load_sensor_from
 import matplotlib.pyplot as plt
 
 import tqdm
@@ -71,7 +71,13 @@ def main():
     for file in sorted(os.listdir(sensors_folder)):
         file_path = os.path.join(sensors_folder, file)
         viewpoint_name = file.split('.')[0]
-        sensor = load_sensor_from((w_size, h_size), file_path)
+        sensor = load_sensor_from((w_size, h_size),
+                                sensor_file=file_path,
+                                integrator=MIGNNConf.INTEGRATOR, 
+                                gnn_until=MIGNNConf.GNN_SPP, 
+                                gnn_nodes=MIGNNConf.N_NODES_PER_GRAPHS, 
+                                gnn_neighbors=MIGNNConf.N_NEIGHBORS)
+        
         sensors.append(sensor)
         viewpoints.append(viewpoint_name)
 
@@ -81,12 +87,11 @@ def main():
     low_res_images = []
 
     gnn_folders = prepare_data(scene_file,
+                integrator = MIGNNConf.INTEGRATOR,
                 max_depth = MIGNNConf.MAX_DEPTH,
-                data_spp = MIGNNConf.GNN_SPP,
                 ref_spp = MIGNNConf.REF_SPP,
                 sensors = sensors,
-                output_folder = f'{output_folder}/generated',
-                sort_chunks=True)
+                output_folder = f'{output_folder}/generated')
 
     output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
             
@@ -114,7 +119,7 @@ def main():
                         os.path.join(output_temp_scaled, v_name)
                     )
                     # need to sort file in order to preserve pixels order
-                    for v_subset in sorted(os.listdir(os.path.join(gnn_folders[v_i], v_name))) 
+                    for v_subset in sorted(os.listdir(gnn_folders[v_i]))
                 ] 
                 for v_i, v_name in enumerate(viewpoints)
             ]))
