@@ -19,7 +19,7 @@ N_NEIGHBORS           = 10
 ENCODING              = 6 # None means no encoding (by default signal encoding)
 MASK                  = {
     'x_node': [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-    'x_edge': [1],
+    'x_edge': [0],
     'y': [0, 0, 0]
 }
 
@@ -64,4 +64,4 @@ EPOCHS                = 20
 HIDDEN_CHANNELS       = 256
 
 # [Predictions params]
-PRED_VIEWPOINT_SIZE   = 100, 100
+PRED_VIEWPOINT_SIZE   = 64, 64

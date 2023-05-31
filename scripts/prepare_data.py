@@ -35,8 +35,9 @@ def main():
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
     sensors = []
-    for file in sorted(os.listdir(sensors_folder)):
-        file_path = os.path.join(sensors_folder, file)
+    viewpoints = []
+    for v_filename in sorted(os.listdir(sensors_folder)):
+        file_path = os.path.join(sensors_folder, v_filename)
 
         sensor = load_sensor_from((w_size, h_size), 
                                   sensor_file=file_path,
@@ -49,6 +50,7 @@ def main():
         # Multiple GNN files will be generated
         for _ in range(sensors_n_samples):
             sensors.append(sensor)
+            viewpoints.append(v_filename)
 
     # multiple datasets to avoid memory overhead
     output_gnn_data = f'{output_folder}/containers'
@@ -58,11 +60,12 @@ def main():
         
         print('[Data generation] start generating GNN data using Mistuba3')
         gnn_folders = prepare_data(scene_file,
-                                    integrator = MIGNNConf.INTEGRATOR,
-                                    max_depth = MIGNNConf.MAX_DEPTH,
-                                    ref_spp = MIGNNConf.REF_SPP,
-                                    sensors = sensors,
-                                    output_folder = f'{output_folder}/rendering')
+                                viewpoints=viewpoints,
+                                integrator = MIGNNConf.INTEGRATOR,
+                                max_depth = MIGNNConf.MAX_DEPTH,
+                                ref_spp = MIGNNConf.REF_SPP,
+                                sensors = sensors,
+                                output_folder = f'{output_folder}/rendering')
         
         print('\n[Building connections] creating connections using Mistuba3')
         

@@ -28,10 +28,11 @@ def main():
     output_folder    = args.output
     
     _, dataset_name = os.path.split(dataset_path)
+    
     c_dataset = PathLightDataset(root=dataset_path)
     
     c_scaled_dataset_path = os.path.join(output_folder, dataset_name)
-
+    
     # create transforms from MIGNNConf
     scalers = skload(f'{scalers_folder}/scalers.bin')
     

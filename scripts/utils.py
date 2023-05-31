@@ -33,22 +33,30 @@ def load_and_convert(filename):
             # nodes data
             x_node = torch.tensor(k_data["x"], dtype=torch.float)
             x_node_pos = torch.tensor(k_data["pos"], dtype=torch.float)
-            x_node_primary = torch.tensor(k_data["x_primary"], dtype=torch.bool)
             
-            # edges data
-            edge_index = torch.tensor(k_data["edge_index"], dtype=torch.long)    
-            edge_attr = torch.tensor(k_data["edge_attr"], dtype=torch.float)
-            edge_built = torch.tensor(k_data["edge_built"], dtype=torch.bool)
+            # [WARN] information not necessary for training or predict 
+            #x_node_primary = torch.tensor(k_data["x_primary"], dtype=torch.bool)
+            
+            # edges data (need to check empty edge data)
+            edge_index = [] if k_data["edge_index"] is None else k_data["edge_index"]
+            edge_index = torch.tensor(edge_index, dtype=torch.long)    
+            
+            edge_attr = [] if k_data["edge_attr"] is None else k_data["edge_attr"]
+            edge_attr = torch.tensor(edge_attr, dtype=torch.float)
+            
+            # [WARN] information not necessary for training or predict 
+            #edge_built = [] if k_data["edge_built"] is None else k_data["edge_built"]
+            #edge_built = torch.tensor(edge_built, dtype=torch.bool)
             
             # targets
             y_targets = torch.tensor(k_data["y"], dtype=torch.float)
             
             graph_data = Data(x=x_node, 
-                            x_primary=x_node_primary, 
+                            #x_primary=x_node_primary, 
                             pos=x_node_pos,
                             edge_index=edge_index.t().contiguous(), 
                             edge_attr=edge_attr,
-                            edge_built=edge_built, 
+                            #edge_built=edge_built, 
                             y=y_targets, 
                             pixel=pixel)
             graphs.append(graph_data)
@@ -96,7 +104,7 @@ def load_sensor_from(img_size, sensor_file, integrator, gnn_until, gnn_nodes, gn
         },
     })
 
-def prepare_data(scene_file, integrator, max_depth, ref_spp, sensors, output_folder):
+def prepare_data(scene_file, viewpoints, integrator, max_depth, ref_spp, sensors, output_folder):
     """Enable to extract GNN data from `pathgnn` integrator and associated reference
     """
     os.makedirs(output_folder, exist_ok=True)
@@ -111,7 +119,7 @@ def prepare_data(scene_file, integrator, max_depth, ref_spp, sensors, output_fol
     print(f'Generation of {len(sensors)} views for `{scene_file}`')
     for view_i, sensor in enumerate(sensors):
 
-        gnn_log_folder = f'{output_folder}/gnn_folder_{view_i}'
+        gnn_log_folder = f'{output_folder}/{viewpoints[view_i]}'
         
         params = mi.traverse(scene)
         params['output_gnn'] = gnn_log_folder

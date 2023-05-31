@@ -21,8 +21,12 @@ class ScalerTransform(BaseTransform):
                 data.x = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         
         if self._edge_scalers is not None:
-            for edge_scaler in self._edge_scalers:
-                data.edge_attr = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
+            
+            # only if graph has connections
+            # TODO: check when scaler is a Encoding one (empty ray may cause error)
+            if data.edge_attr.size()[0] > 0: 
+                for edge_scaler in self._edge_scalers:
+                    data.edge_attr = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
         
         if self._y_scalers is not None:
             
@@ -80,7 +84,11 @@ class SignalEncoder(BaseTransform):
         
         # transform if field using provided mask
         data.x = torch.stack([ torch.cat([self.default(x), self.__apply(x, 'x_node') ]) for x in data.x])
-        data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
+        
+        # check if there is edges data
+        if data.edge_attr.size()[0] > 0:
+            data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
+            
         data.y = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y') ]) for y in data.y])
 
         return data

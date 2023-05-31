@@ -19,7 +19,7 @@ from joblib import load as skload
 from models.gcn_model import GNNL
 
 from utils import prepare_data, scale_subset, merge_by_chunk
-from utils import load_sensor_from
+from utils import load_sensor_from, load_and_save
 import matplotlib.pyplot as plt
 
 import tqdm
@@ -87,13 +87,39 @@ def main():
     low_res_images = []
 
     gnn_folders = prepare_data(scene_file,
+                viewpoints=viewpoints,
                 integrator = MIGNNConf.INTEGRATOR,
                 max_depth = MIGNNConf.MAX_DEPTH,
                 ref_spp = MIGNNConf.REF_SPP,
                 sensors = sensors,
                 output_folder = f'{output_folder}/generated')
 
+    output_temp = f'{output_folder}/datasets/temp/'
     output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
+            
+    print('[Processing] extract generated data for each viewpoint')
+    
+    if not os.path.exists(output_temp):
+        os.makedirs(output_temp, exist_ok=True)
+
+        datasets_params = list(chain.from_iterable([ 
+                [ 
+                    (
+                        os.path.join(v_name, v_subset),
+                        os.path.join(output_temp, viewpoints[v_i])
+                    )
+                    # need to sort file in order to preserve pixels order
+                    for v_subset in sorted(os.listdir(v_name))
+                ] 
+                for v_i, v_name in enumerate(sorted(gnn_folders))
+            ]))
+        
+        # multi-process scale of dataset
+        pool_obj_scaled = ThreadPool()
+
+        intermediate_datasets_path = []
+        for result in tqdm.tqdm(pool_obj_scaled.imap(load_and_save, datasets_params), total=len(datasets_params)):
+            intermediate_datasets_path.append(result)
             
     print('[Processing] scaling all subsets using saved model scalers')
     
@@ -106,22 +132,21 @@ def main():
         transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
 
     applied_transforms = GeoT.Compose(transforms_list)    
-
-    
+        
     if not os.path.exists(output_temp_scaled):
         os.makedirs(output_temp_scaled, exist_ok=True)
 
         scaled_params = list(chain.from_iterable([ 
                 [ 
                     (
-                        os.path.join(gnn_folders[v_i], v_name, v_subset), 
+                        os.path.join(output_temp, viewpoints[v_i], v_subset), 
                         scalers_folder,
-                        os.path.join(output_temp_scaled, v_name)
+                        os.path.join(output_temp_scaled, viewpoints[v_i])
                     )
                     # need to sort file in order to preserve pixels order
-                    for v_subset in sorted(os.listdir(gnn_folders[v_i]))
+                    for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name)))
                 ] 
-                for v_i, v_name in enumerate(viewpoints)
+                for v_i, v_name in enumerate(sorted(os.listdir(output_temp)))
             ]))
         
         # multi-process scale of dataset
@@ -139,7 +164,7 @@ def main():
         # split there into memory chunked datasets
         scaled_path = os.path.join(output_temp_scaled, viewpoint)
         scaled_subsets = sorted([ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ])
-        c_output_folder = f'{output_folder}/datasets/{viewpoint}_chunks'
+        c_output_folder = f'{output_folder}/datasets/chuncks/{viewpoint}_chunks'
         
         # chunk subsets
         if not os.path.exists(c_output_folder):
