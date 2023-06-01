@@ -197,9 +197,9 @@ def main():
         model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
         model.eval()
         
-        pred_image = np.empty((h_size, w_size, 3))
-        target_image = np.empty((h_size, w_size, 3))
-        input_image = np.empty((h_size, w_size, 3))
+        pred_image = np.empty((h_size, w_size, 3)).astype("float32")
+        target_image = np.empty((h_size, w_size, 3)).astype("float32")
+        input_image = np.empty((h_size, w_size, 3)).astype("float32")
 
         n_predict = 0
         n_predictions = int(dataset_info["n_samples"])
@@ -215,13 +215,17 @@ def main():
                 # only if scaler is enabled
                 # TODO: take care of encoded output! (cannot use mask when inverse transform)
                 # Radiance must be the 3 thirds features to predict
+                y_target = data.y.detach().numpy()
                 if scalers.get_scalers_from_field('y') is not None:
                     prediction = scalers.inverse_transform_field('y', prediction)
-                
+                    y_target = scalers.inverse_transform_field('y', y_target)
+                    
+                # pixel coordinate
                 h, w = data.pixel
+                
+                input_image[h, w] = data.radiance.detach().numpy()
                 pred_image[h, w] = prediction
-                target_image[h, w] = data.y.detach().numpy()
-                input_image[h, w] = data.x[MIGNNConf.INPUT_RADIANCE].detach().numpy()
+                target_image[h, w] = y_target
 
                 print(f' -- Prediction progress: {(n_predict + 1) / n_predictions * 100.:.2f}%', end='\r')
                 n_predict += 1

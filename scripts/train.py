@@ -165,6 +165,7 @@ def main():
         # save best only
         if test_r2 > current_best_r2:
             current_best_r2 = test_r2
+            current_best_epoch = epoch
 
             torch.save(model.state_dict(), model_params_filename)
             torch.save(optimizer.state_dict(), optimizer_params_filename)

@@ -21,7 +21,6 @@ def main():
     OUTPUT_DATA = os.path.join(f'{output_folder}', f'{MIGNNConf.SCENE_NAME}_' \
         f'IMG_{MIGNNConf.VIEWPOINT_SIZE[0]}_{MIGNNConf.VIEWPOINT_SIZE[1]}_' \
         f'S-G_{MIGNNConf.GNN_SPP}_' \
-        f'N-G_{MIGNNConf.N_GRAPHS}_' \
         f'N-NG_{MIGNNConf.N_NODES_PER_GRAPHS}_' \
         f'N-NB_{MIGNNConf.N_NEIGHBORS}_' \
         f'VS_{MIGNNConf.VIEWPOINT_SAMPLES}_' \

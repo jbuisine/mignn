@@ -50,6 +50,7 @@ def load_and_convert(filename):
             
             # targets
             y_targets = torch.tensor(k_data["y"], dtype=torch.float)
+            c_radiance = torch.tensor(k_data["radiance"], dtype=torch.float)
             
             graph_data = Data(x=x_node, 
                             #x_primary=x_node_primary, 
@@ -57,7 +58,8 @@ def load_and_convert(filename):
                             edge_index=edge_index.t().contiguous(), 
                             edge_attr=edge_attr,
                             #edge_built=edge_built, 
-                            y=y_targets, 
+                            y=y_targets,
+                            radiance=c_radiance,
                             pixel=pixel)
             graphs.append(graph_data)
     
