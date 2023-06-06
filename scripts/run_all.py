@@ -27,20 +27,15 @@ def main():
         f'D_{MIGNNConf.MAX_DEPTH}')
             
     OUTPUT_DATASET = OUTPUT_DATA + \
-        f'_ENC_{MIGNNConf.ENCODING}_' \
-        f'MX-{"".join(list(map(str, MIGNNConf.MASK["x_node"])))}_' \
-        f'ME-{"".join(list(map(str, MIGNNConf.MASK["x_edge"])))}_' \
-        f'MY-{"".join(list(map(str, MIGNNConf.MASK["y"])))}_' \
+        f'_ENC_{MIGNNConf.ENCODING_SIZE}_' \
+        f'MX-{"".join(list(map(str, MIGNNConf.ENCODING_MASK["x_node"])))}_' \
+        f'ME-{"".join(list(map(str, MIGNNConf.ENCODING_MASK["x_edge"])))}_' \
         f'EP_{MIGNNConf.EPOCHS}_' \
         f'BS_{MIGNNConf.BATCH_SIZE}_' \
-        f'LOSS_{MIGNNConf.LOSS}'
-        # f'NORM_{scalers}')
     
-    MODEL_FOLDER = f'{OUTPUT_DATASET}_model'
+    MODEL_FOLDER = f'{OUTPUT_DATASET}_{MIGNNConf.HIDDEN_CHANNELS}_model'
         
-    OUTPUT_PREDICT = f'{OUTPUT_DATASET}_predict'
-    
-        # f'NORM_{scalers}')
+    OUTPUT_PREDICT = f'{OUTPUT_DATASET}_{MIGNNConf.HIDDEN_CHANNELS}_predict'
 
     TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'
     TEST_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_test'

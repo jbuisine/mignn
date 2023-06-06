@@ -7,7 +7,7 @@ INTEGRATOR            = "pathgnn"
 REF_SPP               = 1000
 GNN_SPP               = 20
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 100, 100
+VIEWPOINT_SIZE        = 64, 64
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]
@@ -16,21 +16,21 @@ N_NEIGHBORS           = 10
 
 # [Input data processing params]
 # k means (k x 2) additional features by feature (cos(2^k) + sin(2^k))
-ENCODING              = 6 # None means no encoding (by default signal encoding)
-MASK                  = {
+# TODO: specific encoding size for each field
+ENCODING_SIZE         = 6 # None means no encoding (by default signal encoding)
+ENCODING_MASK         = {
     'x_node': [1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
     'x_edge': [0],
-    'y': [0, 0, 0]
+    'y_direct': [0, 0, 0],
+    'y_indirect': [0, 0, 0],
+    'origin': [1, 1, 1],
+    'direction': [1, 1, 1]
 }
-
-# specify the `x_node` input radiance fields (if exists)
-INPUT_RADIANCE = [0, 0, 0, 0, 0, 0, 1, 1, 1, 0]
 
 # [Dataset generation and performances params]
 # reduce memory usage while generating dataset
 N_CORES_GEN_AND_TRAIN = 15
 N_CORES_PREDICT       = 11
-VIEWPOINT_CHUNK       = 20 # max size in Mo
 DATASET_CHUNK         = 200 # max size in Mo
 SCENE_REVERSE         = True # specify if width and height are reversed or not
 
@@ -42,17 +42,30 @@ LOSS                  = 'MSE' # MSE, Huber, MAE are supported
 # Use of scalers for specific fields
 NORMALIZERS           = {
     'x_node': {
-        'MinMax': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-        'Standard': [0, 0, 0, 0, 0, 0, 1, 1, 1, 0]
+        #'MinMax': [1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        'Standard': [1, 1, 1, 0, 0, 0, 1, 1, 1, 1]
     },
     'x_edge': {
         'MinMax': [1]
     },
-    'y': {
+    'y_direct': {
         'Log': [1, 1, 1],
-        'MinMax': [1, 1, 1]
+        'Standard': [1, 1, 1]
+    },
+    'y_indirect': {
+        'Log': [1, 1, 1],
+        'Standard': [1, 1, 1]
+    },
+    'origin': {
+        'Standard': [1, 1, 1]
+    },
+    'direction': {
+        'Standard': [1, 1, 1]
     }
 } 
+
+NERF_LAYER_SIZE       = 256
+NERF_HIDDEN_LAYERS    = 6
 # percentage of data to keep into train and test subsets (by default all)
 # usefull when images are in high resolution
 DATASET_PERCENT       = 1

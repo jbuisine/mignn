@@ -11,6 +11,7 @@ from mignn.dataset import PathLightDataset
 
 from utils import init_loss
 from models.gcn_model import GNNL
+from models.nerf import BasicNeRf
 import config as MIGNNConf
 
 
@@ -22,10 +23,10 @@ def main():
     
     args = parser.parse_args()
     dataset_path     = args.dataset
-    output_folder     = args.output
+    output_folder    = args.output
 
     # Some MIGNN params
-    n_epochs          = MIGNNConf.EPOCHS
+    n_epochs         = MIGNNConf.EPOCHS
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -56,20 +57,37 @@ def main():
     
     print('[Information] model architecture:')
     n_node_features = int(train_info['n_node_features'])
-    model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=n_node_features).to(device)
+    gnn_model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=n_node_features).to(device)
     
-    print(model)
-    print(f'[Information] model with number of params: {sum(p.numel() for p in model.parameters())}')
+    # compute number of features for NeRF
+    enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
+    nerf_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
+        + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
+        
+    print("n_features [NeRF]: ", nerf_features)
+    nerf_model = BasicNeRf(nerf_features, MIGNNConf.NERF_LAYER_SIZE, MIGNNConf.NERF_HIDDEN_LAYERS).to(device)
+    
+    print('\nNeRF direct randiance Model:')
+    print(nerf_model)
+    
+    print('GNN indirect radiance Model:')
+    print(gnn_model)
+    print(f'[Information] GNN model with number of params: {sum(p.numel() for p in gnn_model.parameters())}')
+    print(f'[Information] NeRF model with number of params: {sum(p.numel() for p in nerf_model.parameters())}')
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = init_loss(MIGNNConf.LOSS)
+    gnn_optimizer = torch.optim.Adam(gnn_model.parameters(), lr=0.001)
+    nerf_optimizer = torch.optim.Adam(nerf_model.parameters(), lr=0.001)
+    criterion = init_loss(MIGNNConf.LOSS).to(device)
     r2_score = R2Score().to(device)
 
     def train(epoch_id, datasets, n_batchs):
-        model.train()
+        gnn_model.train()
+        nerf_model.train()
 
-        error = 0
-        r2_error = 0
+        gnn_error = 0
+        nerf_error = 0
+        global_error = 0
+        global_r2_error = 0
         b_i = 0
         
         # random datasets to avoid same subset order
@@ -85,26 +103,49 @@ def main():
             for data in train_loader:  # Iterate in batches over the training dataset.
 
                 data = data.to(device)
-
-                out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)  # Perform a single forward pass.
-                loss = criterion(out.flatten(), data.y.flatten())  # Compute the loss.
-                error += loss.item()
-                loss.backward()  # Derive gradients.
-                r2_error += r2_score(out.flatten(), data.y.flatten()).item()
-                optimizer.step()  # Update parameters based on gradients.
-                optimizer.zero_grad()  # Clear gradients.
+                nerf_optimizer.zero_grad()
+                
+                nerf_input = torch.cat([data.origin, data.direction], dim=1).to(device)
+                
+                o_direct_radiance = nerf_model(nerf_input)
+                # o_direct_radiance = o_direct_radiance[:, :-1] * o_direct_radiance[:, -1]
+                loss = criterion(o_direct_radiance.flatten(), data.y_direct.flatten())  # Compute the loss.
+                nerf_error += loss.item()
+                loss.backward()
+                nerf_optimizer.step()  
+                
+                
+                gnn_optimizer.zero_grad() 
+                
+                # TODO: predict also for each graph the camera and direction position
+                o_indirect_radiance = gnn_model(data.x, data.edge_attr, data.edge_index, batch=data.batch) 
+                loss = criterion(o_indirect_radiance.flatten(), data.y_indirect.flatten())
+                gnn_error += loss.item()
+                loss.backward()
+                gnn_optimizer.step()  
+                
+                expected_radiance = data.y_direct.flatten() + data.y_indirect.flatten()
+                o_radiance = o_direct_radiance.flatten() + o_indirect_radiance.flatten()
+                
+                global_error += criterion(o_radiance, expected_radiance).item()
+                global_r2_error += r2_score(o_radiance, expected_radiance).item()
 
                 print(f'[Epoch n°{epoch_id:03d}] -- progress: {(b_i + 1) / n_batchs * 100.:.2f}%' \
-                    f' ({MIGNNConf.LOSS} loss: {error / (b_i + 1):.5f}, R²: {r2_error / (b_i + 1):.5f})', end='\r')
+                    f' ([{MIGNNConf.LOSS}] nerf: {nerf_error / (b_i + 1):.3f}, gnn: {gnn_error / (b_i + 1):.3f}, '\
+                    f'global: {global_error / (b_i + 1):.5f}, ' \
+                    f'R²: {global_r2_error / (b_i + 1):.5f})', end='\r')
                 b_i += 1
                 
-        return error / n_batchs, r2_error / n_batchs
+        return nerf_error / n_batchs, gnn_error / n_batchs, global_error / n_batchs, global_r2_error / n_batchs
 
     def test(datasets, n_batchs):
-        model.eval()
+        gnn_model.eval()
+        nerf_model.eval()
 
-        error = 0
-        r2_error = 0
+        gnn_error = 0
+        nerf_error = 0
+        global_error = 0
+        global_r2_error = 0
         
         # test using multiple intermediate dataset and loader
         # Warn: need to respect number of batch (config batch size)
@@ -117,12 +158,24 @@ def main():
 
                 data = data.to(device)
 
-                out = model(data.x, data.edge_attr, data.edge_index, batch=data.batch)
-                loss = criterion(out.flatten(), data.y.flatten())
-                error += loss.item()
-                r2_error += r2_score(out.flatten(), data.y.flatten()).item()
+                nerf_input = torch.cat([data.origin, data.direction], dim=1).to(device)
+                o_direct_radiance = nerf_model(nerf_input)
+                # o_direct_radiance = o_direct_radiance[:, :-1] * o_direct_radiance[:, -1]
+                loss = criterion(o_direct_radiance.flatten(), data.y_direct.flatten())  # Compute the loss.
+                nerf_error += loss.item()
                 
-        return error / n_batchs, r2_error / n_batchs
+                # TODO: predict also for each graph the camera and direction position
+                o_indirect_radiance = gnn_model(data.x, data.edge_attr, data.edge_index, batch=data.batch) 
+                loss = criterion(o_indirect_radiance.flatten(), data.y_indirect.flatten())
+                gnn_error += loss.item()
+                
+                expected_radiance = data.y_direct.flatten() + data.y_indirect.flatten()
+                o_radiance = o_direct_radiance.flatten() + o_indirect_radiance.flatten()
+                
+                global_error += criterion(o_radiance, expected_radiance).item()
+                global_r2_error += r2_score(o_radiance, expected_radiance).item()
+                
+        return nerf_error / n_batchs, gnn_error / n_batchs, global_error / n_batchs, global_r2_error / n_batchs
 
     stat_file = open(f'{stats_folder}/scores.csv', 'w', encoding='utf-8')
     stat_file.write('train_loss;train_r2;test_loss;test_r2\n')
@@ -134,14 +187,18 @@ def main():
     # save best only
     current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
     
-    model_params_filename = f'{model_folder}/model.pt'
-    optimizer_params_filename = f'{model_folder}/optimizer.pt'
+    gnn_model_params_filename = f'{model_folder}/model_gnn.pt'
+    nerf_model_params_filename = f'{model_folder}/model_nerf.pt'
+    gnn_optimizer_params_filename = f'{model_folder}/optimizer_gnn.pt'
+    nerf_optimizer_params_filename = f'{model_folder}/optimizer_nerf.pt'
     
     # reload model data
-    if os.path.exists(model_params_filename):
+    if os.path.exists(gnn_model_params_filename):
         
-        model.load_state_dict(torch.load(model_params_filename))
-        optimizer.load_state_dict(torch.load(optimizer_params_filename))
+        gnn_model.load_state_dict(torch.load(gnn_model_params_filename))
+        nerf_model.load_state_dict(torch.load(nerf_model_params_filename))
+        gnn_optimizer.load_state_dict(torch.load(gnn_optimizer_params_filename))
+        nerf_optimizer.load_state_dict(torch.load(nerf_optimizer_params_filename))
         
         train_metadata = json.load(open(f'{model_folder}/metadata', 'r', encoding='utf-8'))
         start_epoch = int(train_metadata['epoch'])
@@ -158,17 +215,19 @@ def main():
         return
     
     for epoch in range(start_epoch, n_epochs + 1):
-        train_loss, train_r2 = train(epoch, dataset_train_paths, train_n_batchs)
+        train_nerf_loss, train_gnn_loss, train_loss, train_r2 = train(epoch, dataset_train_paths, train_n_batchs)
         # train_loss, train_r2 = test(dataset_train_paths, train_n_batchs)
-        test_loss, test_r2 = test(dataset_test_paths, test_n_batchs)
+        test_nerf_loss, test_gnn_loss, test_loss, test_r2 = test(dataset_test_paths, test_n_batchs)
         
         # save best only
         if test_r2 > current_best_r2:
             current_best_r2 = test_r2
             current_best_epoch = epoch
 
-            torch.save(model.state_dict(), model_params_filename)
-            torch.save(optimizer.state_dict(), optimizer_params_filename)
+            torch.save(gnn_model.state_dict(), gnn_model_params_filename)
+            torch.save(nerf_model.state_dict(), nerf_model_params_filename)
+            torch.save(gnn_optimizer.state_dict(), gnn_optimizer_params_filename)
+            torch.save(nerf_optimizer.state_dict(), nerf_optimizer_params_filename)
             
         # save number of epochs done
         metadata = { 'epoch': epoch, 'best_r2': test_r2, 'best_epoch': current_best_epoch }
@@ -178,8 +237,10 @@ def main():
         # save model stat data
         stat_file.write(f'{train_loss};{train_r2};{test_loss};{test_r2}\n')
 
-        print(f'[Epoch n°{epoch:03d}]: Train ({MIGNNConf.LOSS} loss: {train_loss:.5f}, R²: {train_r2:.5f}), '\
-            f'Test ({MIGNNConf.LOSS} loss: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
+        print(f'[Epoch n°{epoch:03d}]: Train ([{MIGNNConf.LOSS}] nerf: {train_nerf_loss:.5f}, gnn: {train_gnn_loss:.5f}, '
+            f'global: {train_loss:.5f}, R²: {train_r2:.5f}), '\
+            f'Test ([{MIGNNConf.LOSS}] nerf: {test_nerf_loss:.3f}, gnn: {test_gnn_loss:.3f} '\
+            f'global: {test_loss:.5f}, R²: {test_r2:.5f})', end='\n')
 
     stat_file.close()
 

@@ -3,11 +3,6 @@ import argparse
 import shutil
 import random
 import numpy as np
-from itertools import chain
-
-import mitsuba as mi
-from mitsuba import ScalarTransform4f as T
-mi.set_variant("scalar_rgb")
 
 from mignn.dataset import PathLightDataset
 
@@ -162,9 +157,9 @@ def main():
         
     transforms_list = [ScalerTransform(scalers)]
     
-    if MIGNNConf.ENCODING is not None:
+    if MIGNNConf.ENCODING_SIZE is not None:
         print('[Scaling (with encoding)] start preparing encoded scaled data...')
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
     else:
         print('[Scaling] start preparing scaled data...')
     applied_transforms = GeoT.Compose(transforms_list)    

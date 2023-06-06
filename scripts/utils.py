@@ -6,20 +6,21 @@ import math
 import json
 import msgpack
 import torch
-from torch_geometric.data import Data
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
-import cv2
 import subprocess
 
 import mitsuba as mi
 from mitsuba import ScalarTransform4f as T
+mi.set_variant("scalar_rgb")
 
 from mignn.dataset import PathLightDataset
+from mignn.dataset import GraphLoader
 
 import config as MIGNNConf
       
 def load_and_convert(filename):
+    
     #global done
     graphs = []
     with open(filename, 'rb') as f:
@@ -28,39 +29,9 @@ def load_and_convert(filename):
         # for each key data, extract graph
         for key, k_data in data.items():
             
-            pixel = torch.tensor(list(map(int, key.split(','))), dtype=torch.int32)
-            
-            # nodes data
-            x_node = torch.tensor(k_data["x"], dtype=torch.float)
-            x_node_pos = torch.tensor(k_data["pos"], dtype=torch.float)
-            
-            # [WARN] information not necessary for training or predict 
-            #x_node_primary = torch.tensor(k_data["x_primary"], dtype=torch.bool)
-            
-            # edges data (need to check empty edge data)
-            edge_index = [] if k_data["edge_index"] is None else k_data["edge_index"]
-            edge_index = torch.tensor(edge_index, dtype=torch.long)    
-            
-            edge_attr = [] if k_data["edge_attr"] is None else k_data["edge_attr"]
-            edge_attr = torch.tensor(edge_attr, dtype=torch.float)
-            
-            # [WARN] information not necessary for training or predict 
-            #edge_built = [] if k_data["edge_built"] is None else k_data["edge_built"]
-            #edge_built = torch.tensor(edge_built, dtype=torch.bool)
-            
-            # targets
-            y_targets = torch.tensor(k_data["y"], dtype=torch.float)
-            c_radiance = torch.tensor(k_data["radiance"], dtype=torch.float)
-            
-            graph_data = Data(x=x_node, 
-                            #x_primary=x_node_primary, 
-                            pos=x_node_pos,
-                            edge_index=edge_index.t().contiguous(), 
-                            edge_attr=edge_attr,
-                            #edge_built=edge_built, 
-                            y=y_targets,
-                            radiance=c_radiance,
-                            pixel=pixel)
+            pixel_coord = list(map(int, key.split(',')))
+                 
+            graph_data = GraphLoader.load(pixel_coord, k_data)
             graphs.append(graph_data)
     
     return graphs

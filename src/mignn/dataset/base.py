@@ -1,7 +1,5 @@
 import torch
-from torch_geometric.data import InMemoryDataset, Data
-
-from mignn.container import SimpleLightGraphContainer
+from torch_geometric.data import InMemoryDataset
 
 class PathLightDataset(InMemoryDataset):
     def __init__(self, root, data_list=None, transform=None, pre_transform=None, load=True):
@@ -39,41 +37,7 @@ class PathLightDataset(InMemoryDataset):
     @property         
     def num_target_features(self):
         if self.data is not None:
-            return self.data.y.size()[-1]
+            return self.data.y_indirect.size()[-1]
 
         return None
     
-    @staticmethod
-    def from_container(container: SimpleLightGraphContainer, output_path: str, \
-        load: bool=True, verbose: bool=True):
-        
-        # prepare Dataset    
-        data_list = []
-        
-        n_keys = len(container.keys())
-        step = (n_keys // 100) + 1
-        
-        for idx, (_, graphs) in enumerate(container.items()):
-            
-            # graphs = merged_graph_container.graphs_at(key)
-            for graph in graphs:
-                torch_data = graph.data.to_torch()
-                
-                # fix infinite values
-                edge_attr = torch_data.edge_attr
-                edge_attr[torch.isinf(torch_data.edge_attr)] = 0
-                
-                data = Data(x = torch_data.x, 
-                        edge_index = torch_data.edge_index,
-                        y = torch_data.y,
-                        edge_attr = edge_attr,
-                        pos = torch_data.pos)
-                
-                data_list.append(data)
-            
-            if verbose and (idx % step == 0 or idx >= n_keys - 1):
-                print(f'[Prepare torch data] progress: {(idx + 1) / n_keys * 100.:.0f}%', end='\r')
-        
-        # save dataset
-        return PathLightDataset(output_path, data_list, load=load)
-

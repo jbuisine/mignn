@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--output', type=str, help="output scaled subset folder", required=True)
 
     args = parser.parse_args()
-
+    
     dataset_path     = args.dataset
     scalers_folder   = args.scalers
     output_folder    = args.output
@@ -38,8 +38,8 @@ def main():
     
     transforms_list = [ScalerTransform(scalers)]
     
-    if MIGNNConf.ENCODING is not None:
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
+    if MIGNNConf.ENCODING_SIZE is not None:
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
 
     applied_transforms = GeoT.Compose(transforms_list) 
     

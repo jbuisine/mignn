@@ -9,33 +9,42 @@ from .scalers import ScalersManager
 class ScalerTransform(BaseTransform):
 
     def __init__(self, scalers_manager: ScalersManager):
-        self._x_scalers = scalers_manager.get_scalers_from_field('x_node')
-        self._edge_scalers = scalers_manager.get_scalers_from_field('x_edge')
-        self._y_scalers = scalers_manager.get_scalers_from_field('y')
-
+        
+        # store scaler fields
+        self._scalers = scalers_manager
+        self._fields = scalers_manager.get_scalers_fields()
+            
     def __call__(self, data: Data) -> Data:
         
         # perform scale of data (if scalers exists)
-        if self._x_scalers is not None:
-            for x_scaler in self._x_scalers:
+        if 'x_node' in self._fields:
+            x_scalers = self._scalers.get_scalers_from_field('x_node')
+            for x_scaler in x_scalers:
                 data.x = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         
-        if self._edge_scalers is not None:
+        # edge attributes
+        if 'x_edge' in self._fields:
             
+            edge_scalers = self._scalers.get_scalers_from_field('x_edge')
             # only if graph has connections
             # TODO: check when scaler is a Encoding one (empty ray may cause error)
             if data.edge_attr.size()[0] > 0: 
-                for edge_scaler in self._edge_scalers:
+                for edge_scaler in edge_scalers:
                     data.edge_attr = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
         
-        if self._y_scalers is not None:
+        # targets and camera attributes
+        for c_key in ['y_direct', 'y_indirect', 'origin', 'direction']:
+            if c_key in self._fields:
             
-            # reshape `y` data
-            if len(data.y.shape) == 1:
-                data.y = data.y.unsqueeze(0)
-            for y_scaler in self._y_scalers:
-                data.y = torch.tensor(y_scaler.transform(data.y), dtype=torch.float)
-
+                # reshape data
+                if len(data[c_key].shape) == 1:
+                    data[c_key] = data[c_key].unsqueeze(0)
+                    
+                c_scalers = self._scalers.get_scalers_from_field(c_key)
+                
+                for c_scaler in c_scalers:
+                    data[c_key] = torch.tensor(c_scaler.transform(data[c_key]), dtype=torch.float)
+                   
         return data
     
     def __repr__(self) -> str:
@@ -89,8 +98,14 @@ class SignalEncoder(BaseTransform):
         if data.edge_attr.size()[0] > 0:
             data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
             
-        data.y = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y') ]) for y in data.y])
+        # target radiance attributes
+        data.y_direct = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_direct])
+        data.y_indirect = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_indirect])
 
+        # camera attributes
+        data.origin = torch.stack([ torch.cat([self.default(o), self.__apply(o, 'origin') ]) for o in data.origin])
+        data.direction = torch.stack([ torch.cat([self.default(d), self.__apply(d, 'direction') ]) for d in data.direction])
+        
         return data
     
     def __repr__(self) -> str:

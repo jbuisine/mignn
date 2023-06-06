@@ -3,9 +3,6 @@ import argparse
 import shutil
 from itertools import chain
 
-import mitsuba as mi
-mi.set_variant("scalar_rgb")
-
 import tqdm
 from multiprocessing.pool import ThreadPool
 
@@ -67,7 +64,7 @@ def main():
                                 sensors = sensors,
                                 output_folder = f'{output_folder}/rendering')
         
-        print('\n[Building connections] creating connections using Mistuba3')
+        print('\n[Data loading] loading generated data from Mistuba3')
         
     if not os.path.exists(output_gnn_data):
         

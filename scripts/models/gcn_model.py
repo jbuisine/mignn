@@ -21,8 +21,10 @@ class GNNL(torch.nn.Module):
         self.norm3 = BatchNorm(hidden_channels)
         
         self.lin1 = Linear(hidden_channels, hidden_channels)
-        self.lin2 = Linear(hidden_channels, int(hidden_channels / 2))
-        self.lin3 = Linear(int(hidden_channels / 2), 3)
+        self.lin2 = Linear(hidden_channels, hidden_channels)
+        self.lin3 = Linear(hidden_channels, hidden_channels)
+        self.lin4 = Linear(hidden_channels, hidden_channels)
+        self.lin5 = Linear(hidden_channels, 3)
 
     def forward(self, x_node, edge_attr, edge_index, batch):
         # 1. Obtain node embeddings 
@@ -54,9 +56,17 @@ class GNNL(torch.nn.Module):
         # 3. Apply a final classifier
         x = F.dropout(x_data, p=0.5, training=self.training)
         x = self.lin1(x)
+        x = x.relu()
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin2(x)
+        x = x.relu()
         x = F.dropout(x, p=0.5, training=self.training)
         x = self.lin3(x)
+        x = x.relu()
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin4(x)
+        x = x.relu()
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin5(x)
         
         return x

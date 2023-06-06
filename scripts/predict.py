@@ -4,10 +4,6 @@ import json
 import numpy as np
 from itertools import chain
 
-import mitsuba as mi
-from mitsuba import ScalarTransform4f as T
-mi.set_variant("scalar_rgb")
-
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
 
@@ -17,6 +13,7 @@ import torch
 from joblib import load as skload
 
 from models.gcn_model import GNNL
+from models.nerf import BasicNeRf
 
 from utils import prepare_data, scale_subset, merge_by_chunk
 from utils import load_sensor_from, load_and_save
@@ -128,8 +125,8 @@ def main():
 
     transforms_list = [ScalerTransform(scalers)]
     
-    if MIGNNConf.ENCODING is not None:
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING, MIGNNConf.MASK))
+    if MIGNNConf.ENCODING_SIZE is not None:
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
 
     applied_transforms = GeoT.Compose(transforms_list)    
         
@@ -172,7 +169,7 @@ def main():
         
         datasets_path.append(c_output_folder)
     
-#print('[Cleaning] clear intermediated saved containers')
+    #print('[Cleaning] clear intermediated saved containers')
     #os.system(f'rm -r {output_temp}')
     #os.system(f'rm -r {output_temp_scaled}')
     os.makedirs(predictions_folder, exist_ok=True)
@@ -190,12 +187,20 @@ def main():
         viewpoint_dataset_paths = sorted([ os.path.join(dataset_path, p) for p in os.listdir(dataset_path) \
                     if 'metadata' not in p ])
 
+        # Load MODEL
+        gnn_model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=n_node_features)
         
-        model = GNNL(hidden_channels=MIGNNConf.HIDDEN_CHANNELS, n_features=n_node_features)
-        # print('[Information] Model has been loaded')
+        enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
+        nerf_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
+            + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
+            
+        nerf_model = BasicNeRf(nerf_features, MIGNNConf.NERF_LAYER_SIZE, MIGNNConf.NERF_HIDDEN_LAYERS).to(device)
 
-        model.load_state_dict(torch.load(f'{model_folder}/model.pt'))
-        model.eval()
+        gnn_model.load_state_dict(torch.load(f'{model_folder}/model_gnn.pt'))
+        gnn_model.eval()
+        
+        nerf_model.load_state_dict(torch.load(f'{model_folder}/model_nerf.pt'))
+        nerf_model.eval()
         
         pred_image = np.empty((h_size, w_size, 3)).astype("float32")
         target_image = np.empty((h_size, w_size, 3)).astype("float32")
@@ -215,7 +220,7 @@ def main():
                 # only if scaler is enabled
                 # TODO: take care of encoded output! (cannot use mask when inverse transform)
                 # Radiance must be the 3 thirds features to predict
-                y_target = data.y.detach().numpy()
+                y_target = data.y_direct.detach().numpy() + data.y_indirect.detach().numpy()
                 if scalers.get_scalers_from_field('y') is not None:
                     prediction = scalers.inverse_transform_field('y', prediction)
                     y_target = scalers.inverse_transform_field('y', y_target)
