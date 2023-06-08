@@ -33,9 +33,9 @@ def main():
         f'EP_{MIGNNConf.EPOCHS}_' \
         f'BS_{MIGNNConf.BATCH_SIZE}_' \
     
-    MODEL_FOLDER = f'{OUTPUT_DATASET}_{MIGNNConf.HIDDEN_CHANNELS}_model'
+    MODEL_FOLDER = f'{OUTPUT_DATASET}_{MIGNNConf.GNN_HIDDEN_CHANNELS}_model'
         
-    OUTPUT_PREDICT = f'{OUTPUT_DATASET}_{MIGNNConf.HIDDEN_CHANNELS}_predict'
+    OUTPUT_PREDICT = f'{OUTPUT_DATASET}_{MIGNNConf.GNN_HIDDEN_CHANNELS}_predict'
 
     TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'
     TEST_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_test'

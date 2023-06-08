@@ -1,2 +1,0 @@
-LookAt  -48.8373 20.1356 7.6655  -47.9148 19.7868 7.51562  0 1 0
-Camera "perspective" "float fov" 20.1143

@@ -33,7 +33,7 @@ class ScalerTransform(BaseTransform):
                     data.edge_attr = torch.tensor(edge_scaler.transform(data.edge_attr), dtype=torch.float)
         
         # targets and camera attributes
-        for c_key in ['y_direct', 'y_indirect', 'origin', 'direction']:
+        for c_key in ['y_direct', 'y_indirect', 'y_total', 'origin', 'direction']:
             if c_key in self._fields:
             
                 # reshape data
@@ -99,6 +99,7 @@ class SignalEncoder(BaseTransform):
             data.edge_attr = torch.stack([ torch.cat([self.default(e), self.__apply(e, 'x_edge') ]) for e in data.edge_attr])
             
         # target radiance attributes
+        data.y_total = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_total') ]) for y in data.y_total])
         data.y_direct = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_direct])
         data.y_indirect = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_indirect])
 

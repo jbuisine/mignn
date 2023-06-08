@@ -106,8 +106,8 @@ class ScalersManager():
     """Manage scaling preprocessing of graph data
     """
     
-    _dataset_field_names = ['x', 'edge_attr', 'y_direct', 'y_indirect', 'origin', 'direction']
-    _expected_keys = ['x_node', 'x_edge', 'y_direct', 'y_indirect', 'origin', 'direction']
+    _dataset_field_names = ['x', 'edge_attr', 'y_direct', 'y_indirect', 'y_total', 'origin', 'direction']
+    _expected_keys = ['x_node', 'x_edge', 'y_direct', 'y_indirect', 'y_total', 'origin', 'direction']
     
     def __init__(self, config: dict) -> None:
         """Config scaler order by field is preserved
@@ -158,7 +158,7 @@ class ScalersManager():
                 # transform each data
                 data = dataset.data[field_key]
                 
-                if field_key in ['y_direct', 'y_indirect', 'origin', 'direction']:
+                if field_key in ['y_direct', 'y_indirect', 'y_total', 'origin', 'direction']:
                     data = data.reshape((dataset.len(), -1))    
                     
                 for norm_model in self._normalizers[key]:
@@ -175,7 +175,7 @@ class ScalersManager():
                 # transform each data
                 data = dataset.data[field_key]
                 
-                if field_key in ['y_direct', 'y_indirect', 'origin', 'direction']:
+                if field_key in ['y_direct', 'y_indirect', 'y_total', 'origin', 'direction']:
                     # number of predictions in dataset
                     data = data.reshape((dataset.len(), -1))
                 

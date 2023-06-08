@@ -237,19 +237,3 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
     
     with open(f'{output_path}/metadata', 'w', encoding='utf-8') as outfile:
         json.dump(metadata, outfile)
-
-
-def init_loss(loss_name):
-    """Get the expected torch loss
-    """
-    
-    if loss_name == 'MSE':
-        return torch.nn.MSELoss()
-
-    if loss_name == 'MAE':
-        return torch.nn.L1Loss()
-    
-    if loss_name == 'Huber':
-        return torch.nn.HuberLoss()
-    
-    return None

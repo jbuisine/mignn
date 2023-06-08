@@ -7,14 +7,17 @@ class GraphLoader():
     def load(pixel, data):
         
         # TODO: AVOID empty graph (no node data)
-            
         pixel = torch.tensor(pixel, dtype=torch.int32)
         origin = torch.tensor(data["origin"], dtype=torch.float)
-        direction = torch.tensor(data["direction"], dtype=torch.float)
+        
+        direction = [] if data["direction"] is None else data["direction"]
+        direction = torch.tensor(direction, dtype=torch.float)
             
         # nodes data
-        x_node = torch.tensor(data["x"], dtype=torch.float)
-        x_node_pos = torch.tensor(data["pos"], dtype=torch.float)
+        x_node = [] if data["x"] is None else data["x"]
+        x_node = torch.tensor(x_node, dtype=torch.float)
+        x_node_pos = [] if data["pos"] is None else data["pos"]
+        x_node_pos = torch.tensor(x_node_pos, dtype=torch.float)
         
         # edges data (need to check empty edge data)
         edge_index = [] if data["edge_index"] is None else data["edge_index"]
@@ -35,6 +38,7 @@ class GraphLoader():
                     pos=x_node_pos,
                     edge_index=edge_index.t().contiguous(), 
                     edge_attr=edge_attr,
+                    y_total=y_direct_targets + y_indirect_targets, # required for scalers
                     y_direct=y_direct_targets,
                     y_indirect=y_indirect_targets,
                     direct_radiance=c_direct_radiance,
