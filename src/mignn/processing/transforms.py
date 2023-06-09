@@ -101,7 +101,7 @@ class SignalEncoder(BaseTransform):
         # target radiance attributes
         data.y_total = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_total') ]) for y in data.y_total])
         data.y_direct = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_direct])
-        data.y_indirect = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_direct') ]) for y in data.y_indirect])
+        data.y_indirect = torch.stack([ torch.cat([self.default(y), self.__apply(y, 'y_indirect') ]) for y in data.y_indirect])
 
         # camera attributes
         data.origin = torch.stack([ torch.cat([self.default(o), self.__apply(o, 'origin') ]) for o in data.origin])

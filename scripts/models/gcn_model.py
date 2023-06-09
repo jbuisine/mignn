@@ -63,7 +63,17 @@ class GNNL(torch.nn.Module):
         # 3. Apply a final classifier
         return self._linear_sequence(x_data)
 
-
+    def metric(self, data, predicted, expected, loss):
+        
+        # no pre processing required
+        return loss(predicted.flatten(), expected.flatten())
+    
+    def radiance_from_predictions(self, predictions):
+        
+        # no post processing required
+        return predictions
+    
+    
 # GNN Model with concatenated viewpoint information 
 class GNNL_VP(torch.nn.Module):
     
@@ -93,11 +103,8 @@ class GNNL_VP(torch.nn.Module):
             self._linear_sequence.append(torch.nn.ReLU())
         
         self._linear_sequence.append(Linear(dense_hidden_layers, 3))
-        
-        # TODO: coordinate camera could also be predicted instead of concatenated
 
     def forward(self, data):
-        
         
         camera_features = torch.cat([data.origin, data.direction], dim=1)
         
@@ -123,6 +130,15 @@ class GNNL_VP(torch.nn.Module):
         # 3. Apply a final classifier
         return self._linear_sequence(x_data)
 
+    def metric(self, data, predicted, expected, loss):
+        
+        # no pre processing required
+        return loss(predicted.flatten(), expected.flatten())
+    
+    def radiance_from_predictions(self, predictions):
+        
+        # no post processing required
+        return predictions
 
 # GNN Model with concatenated RGB and viewpoint information to predict
 class GNNL_VPP(torch.nn.Module):
@@ -130,8 +146,9 @@ class GNNL_VPP(torch.nn.Module):
     def __init__(self, graph_hidden_layers, dense_hidden_layers, 
                 n_dense_layers, latent_size, n_features, n_camera_features):
         
-        super(GNNL_VP, self).__init__()
+        super(GNNL_VPP, self).__init__()
         
+        self._n_camera_features = n_camera_features
         
         self.conv1 = GCNConv(n_features, graph_hidden_layers)
         self.norm1 = BatchNorm(graph_hidden_layers)
@@ -176,7 +193,20 @@ class GNNL_VPP(torch.nn.Module):
         
         # 3. Apply a final classifier in order to predict RGB values and camera
         return self._linear_sequence(h_node)
-
+    
+    
+    def metric(self, data, predicted, expected, loss):
+        
+        camera_features = torch.cat([data.origin, data.direction], dim=1)
+        expected_camera_features = torch.cat([expected, camera_features], dim=1)
+        
+        return loss(predicted.flatten(), expected_camera_features.flatten())
+    
+    def radiance_from_predictions(self, predictions):
+        
+        n_features = predictions.size()[-1]
+        return predictions[:, :n_features - self._n_camera_features]
+        
 
 
 

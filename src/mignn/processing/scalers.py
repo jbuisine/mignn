@@ -38,6 +38,10 @@ class MaskedScaler(ABC):
         if torch.is_tensor(X):
             X = X.numpy()
             
+        # create new axis if necessary
+        if len(X.shape) == 1:
+            X = X[np.newaxis, :]
+            
         X[:, self._mask] = self._scaler.inverse_transform(X[:, self._mask])
         return X
     

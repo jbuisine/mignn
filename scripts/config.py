@@ -7,7 +7,7 @@ INTEGRATOR            = "pathgnn"
 REF_SPP               = 1000
 GNN_SPP               = 20
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 64, 64
+VIEWPOINT_SIZE        = 512, 512
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]
@@ -102,7 +102,7 @@ ENCODING_MASK         = {
 DATASET_PERCENT       = 1
 TRAINING_SPLIT        = 0.8
 BATCH_SIZE            = 128
-EPOCHS                = 40
+EPOCHS                = 20
 
 # [Predictions params]
-PRED_VIEWPOINT_SIZE   = 64, 64
+PRED_VIEWPOINT_SIZE   = 512, 512

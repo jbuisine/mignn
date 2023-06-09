@@ -9,7 +9,7 @@ from torch_geometric.loader import DataLoader
 from mignn.dataset import PathLightDataset
 
 import config as MIGNNConf
-from models.manager import SimpleModelManager
+from models.manager import ManagerFactory
 from models.param import ModelParam
 
 def main():
@@ -29,7 +29,6 @@ def main():
 
     model_folder = f'{output_folder}/model'
     stats_folder = f'{output_folder}/stats'
-    os.makedirs(model_folder, exist_ok=True)
     os.makedirs(stats_folder, exist_ok=True)
     
     print(f'[Loading] dataset from: `{dataset_path}`')
@@ -47,7 +46,7 @@ def main():
     test_info = json.load(open(f'{dataset_path}/data/test/metadata', 'r', encoding='utf-8'))
     
     train_n_batchs = int(train_info['n_batchs'])
-    test_n_batchs = int(test_info['n_batchs'])
+    # test_n_batchs = int(test_info['n_batchs'])
     
     print(f'[Information] train dataset composed of: {train_info["n_samples"]} graphs')
     print(f'[Information] test dataset composed of: {test_info["n_samples"]} graphs')
@@ -56,25 +55,16 @@ def main():
     
     # camera features size
     enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
-    camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
+    n_camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
         + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
         
     n_node_features = int(train_info['n_node_features'])
     
-    gnn_params = {
-        'graph_hidden_channels': MIGNNConf.GNN_HIDDEN_CHANNELS,
-        'dense_hidden_layers': MIGNNConf.GNN_DENSE_HIDDEN,
-        'n_dense_layers': MIGNNConf.GNN_N_DENSE_LAYERS,
-        'latent_space': MIGNNConf.GNN_LATENT_SPACE,
-        'n_features': n_node_features
-    }
+    model_manager = ManagerFactory.create(n_node_features, n_camera_features, MIGNNConf)
     
-    gnn_model_param = ModelParam(kind='gnn', name=MIGNNConf.MODELS['gnn'], loss=MIGNNConf.LOSS['gnn'], params=gnn_params)
-    model_manager = SimpleModelManager([gnn_model_param])
-    
+    # END INSTANTIATE THE MODEL MANAGER
     for kind, model in model_manager.models.items():
         print(f'[Information] {kind} model with number of params: {sum(p.numel() for p in model.parameters())}')
-
 
     def train(epoch_id, datasets, n_batchs):
         model_manager.train()
@@ -98,12 +88,12 @@ def main():
                 # TODO: DO STEP using manager
                 model_manager.step(data)
                 
-                print(f'[Epoch n°{epoch_id:03d}] -- progress: {(b_i + 1) / n_batchs * 100.:.2f}% {model_manager.information("train")}', end='\r')
+                print(f'[Epoch n°{epoch_id:03d}] -- progress: {(b_i + 1) / n_batchs * 100.:.2f}% -- {model_manager.information("train")}', end='\r')
                 
                 b_i += 1
                 
 
-    def test(datasets, n_batchs):
+    def test(datasets):
         model_manager.eval()
         
         # test using multiple intermediate dataset and loader
@@ -120,7 +110,8 @@ def main():
                 
 
     stat_file = open(f'{stats_folder}/scores.csv', 'w', encoding='utf-8')
-    stat_file.write('train_loss;train_r2;test_loss;test_r2\n')
+    header = model_manager.metrics_header()
+    stat_file.write(f'{";".join(header)}\n')
 
     # reload model if necessary
     start_epoch = 1
@@ -129,28 +120,11 @@ def main():
     # save best only
     current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
     
-    gnn_model_params_filename = f'{model_folder}/model_gnn.pt'
-    nerf_model_params_filename = f'{model_folder}/model_nerf.pt'
-    gnn_optimizer_params_filename = f'{model_folder}/optimizer_gnn.pt'
-    nerf_optimizer_params_filename = f'{model_folder}/optimizer_nerf.pt'
-    
     # reload model data
-    if os.path.exists(gnn_model_params_filename):
+    if os.path.exists(model_folder):
         
-        gnn_model = model_manager.models['gnn']
-        gnn_optimizer = model_manager.optimizers['gnn']
-        
-        gnn_model.load_state_dict(torch.load(gnn_model_params_filename))
-        gnn_optimizer.load_state_dict(torch.load(gnn_optimizer_params_filename))
-        
-        
-        if 'nerf' in model_manager.models.keys():
-        
-            nerf_model = model_manager.models['nerf']
-            nerf_model.load_state_dict(torch.load(nerf_model_params_filename))
-            
-            nerf_optimizer = model_manager.optimizers['nerf']
-            nerf_optimizer.load_state_dict(torch.load(nerf_optimizer_params_filename))
+        # load model using model manager
+        model_manager.load(model_folder)
         
         train_metadata = json.load(open(f'{model_folder}/metadata', 'r', encoding='utf-8'))
         start_epoch = int(train_metadata['epoch'])
@@ -169,30 +143,17 @@ def main():
     for epoch in range(start_epoch, n_epochs + 1):
         
         train(epoch, dataset_train_paths, train_n_batchs)
-        test(dataset_test_paths, test_n_batchs)
+        test(dataset_test_paths)
         
-        
-        test_r2 = model_manager.metrics['test']['gnn']['r2'] / test_n_batchs
+        test_r2 = model_manager.score('test')
         
         # save best only
         if test_r2 > current_best_r2:
             current_best_r2 = test_r2
             current_best_epoch = epoch
                             
-                        
-            gnn_model = model_manager.models['gnn']
-            gnn_optimizer = model_manager.optimizers['gnn']
-
-            if 'nerf' in model_manager.models.keys():
-            
-                nerf_model = model_manager.models['nerf']
-                torch.save(nerf_model.state_dict(), nerf_model_params_filename)
-                
-                nerf_optimizer = model_manager.optimizers['nerf']
-                torch.save(nerf_optimizer.state_dict(), nerf_optimizer_params_filename)
-            
-            torch.save(gnn_model.state_dict(), gnn_model_params_filename)
-            torch.save(gnn_optimizer.state_dict(), gnn_optimizer_params_filename)
+            # save using the model manager
+            model_manager.save(model_folder)    
             
         # save number of epochs done
         metadata = { 'epoch': epoch, 'best_r2': test_r2, 'best_epoch': current_best_epoch }
@@ -200,7 +161,8 @@ def main():
             json.dump(metadata, outfile)
             
         # save model stat data
-        # stat_file.write(f'{train_loss};{train_r2};{test_loss};{test_r2}\n')
+        metrics = model_manager.metrics_values()
+        stat_file.write(f'{";".join(list(map(str, metrics)))}\n')
 
         print(f'[Epoch n°{epoch:03d}]: train: {model_manager.information("train")}, test: {model_manager.information("test")}')
         model_manager.clear_metrics()

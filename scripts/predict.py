@@ -12,9 +12,6 @@ from mignn.dataset import PathLightDataset
 import torch
 from joblib import load as skload
 
-from models.gcn_model import GNNL, GNNL_VP
-from models.nerf import BasicNeRf
-
 from utils import prepare_data, scale_subset, merge_by_chunk
 from utils import load_sensor_from, load_and_save
 import matplotlib.pyplot as plt
@@ -28,6 +25,8 @@ from PIL import Image
 
 import torch_geometric.transforms as GeoT
 from mignn.processing import ScalerTransform, SignalEncoder
+
+from models.manager import ManagerFactory
 
 import config as MIGNNConf
 
@@ -188,23 +187,16 @@ def main():
                     if 'metadata' not in p ])
 
         enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
-        camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
+        n_camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
             + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
             
-        # Load MODEL
-        gnn_model = GNNL_VP(graph_hlayers=MIGNNConf.GNN_HIDDEN_CHANNELS, 
-                        dense_hlayers=MIGNNConf.GNN_HIDDEN_CHANNELS, 
-                        n_features=n_node_features, 
-                        n_camera_features=camera_features).to(device)
+        # [INSTANTIATE] Model manager
+        model_manager = ManagerFactory.create(n_node_features, n_camera_features, MIGNNConf)
+        model_manager.load(model_folder)
         
-        nerf_model = BasicNeRf(camera_features, MIGNNConf.NERF_LAYER_SIZE, MIGNNConf.NERF_HIDDEN_LAYERS).to(device)
-
-        gnn_model.load_state_dict(torch.load(f'{model_folder}/model_gnn.pt'))
-        gnn_model.eval()
-        
-        nerf_model.load_state_dict(torch.load(f'{model_folder}/model_nerf.pt'))
-        nerf_model.eval()
-        
+        # turn models into eval mode
+        model_manager.eval()
+    
         pred_image = np.empty((h_size, w_size, 3)).astype("float32")
         target_image = np.empty((h_size, w_size, 3)).astype("float32")
         input_image = np.empty((h_size, w_size, 3)).astype("float32")
@@ -220,34 +212,15 @@ def main():
                 data = dataset[d_i]
                 data = data.to(device)
                 
-                nerf_input = torch.cat([data.origin, data.direction], dim=1).to(device)
-                
-                direct_prediction = nerf_model(nerf_input).detach().cpu().numpy()
-                
-                indirect_prediction = gnn_model(data.x, data.edge_attr, data.edge_index, 
-                                            camera_features=nerf_input, 
-                                            batch=data.batch).detach().cpu().numpy()
-                
-                # only if scaler is enabled
-                # TODO: take care of encoded output! (cannot use mask when inverse transform)
-                # Radiance (indirect ou direct) must be the 3 thirds features to predict
-                y_direct_target = data.y_direct.detach().cpu().numpy()
-                y_indirect_target = data.y_indirect.detach().cpu().numpy()
-                
-                if scalers.get_scalers_from_field('y_direct') is not None:
-                    direct_prediction = scalers.inverse_transform_field('y_direct', direct_prediction)
-                    y_direct_target = scalers.inverse_transform_field('y_direct', y_direct_target)
-                    
-                if scalers.get_scalers_from_field('y_indirect') is not None:
-                    indirect_prediction = scalers.inverse_transform_field('y_indirect', indirect_prediction)
-                    y_indirect_target = scalers.inverse_transform_field('y_indirect', y_indirect_target)
-                    
+                # predict using model manager
+                y_input, y_predicted, y_target = model_manager.predict(data, scalers)
+                   
                 # pixel coordinate
                 h, w = data.pixel
                 
-                input_image[h, w] = y_direct_target + y_indirect_target
-                pred_image[h, w] = direct_prediction + indirect_prediction
-                target_image[h, w] = y_indirect_target + y_direct_target
+                input_image[h, w] = y_input
+                pred_image[h, w] = y_predicted
+                target_image[h, w] = y_target
 
                 print(f' -- Prediction progress: {(n_predict + 1) / n_predictions * 100.:.2f}%', end='\r')
                 n_predict += 1

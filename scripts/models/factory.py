@@ -40,7 +40,7 @@ class ModelFactory():
             # construct expected model
             return SimpleNeRf(n_features=params['n_features'], 
                     hidden_size=params['hidden_size'],
-                    n_hidden_layers=['n_dense_layers'])
+                    n_hidden_layers=params['n_hidden_layers'])
             
         return None
             
