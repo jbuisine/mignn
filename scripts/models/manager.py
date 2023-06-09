@@ -231,10 +231,9 @@ class SimpleModelManager(ModelManager):
         self._optimizers['gnn'].zero_grad() 
         
         y_predicted = self._models['gnn'](data)
-        y_target = data.y_total.flatten()
         
         # predict whole radiance
-        y_radiance_predicted = self._models['gnn'].radiance_from_predictions(y_predicted)
+        self._models['gnn'].radiance_from_predictions(y_predicted)
 
         loss = self._models['gnn'].metric(data, y_predicted, data.y_direct, self._losses['gnn'])
         self._metrics['train']['gnn']['loss'] += loss.item()
@@ -243,8 +242,6 @@ class SimpleModelManager(ModelManager):
         
         loss.backward()
         self._optimizers['gnn'].step()
-        
-        self._metrics['train']['gnn']['r2'] += self._r2_metric(y_radiance_predicted.flatten(), y_target).item()
         
         
     def predict(self, data, scalers) -> List[torch.Tensor]:
