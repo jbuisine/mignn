@@ -218,9 +218,9 @@ class SimpleModelManager(ModelManager):
         y_predicted = self._models['gnn'](data)
         
         # predict whole radiance
-        loss = self._models['gnn'].metric(data, y_predicted, data.y_direct, self._losses['gnn'])
+        loss = self._models['gnn'].metric(data, y_predicted, data.y_total, self._losses['gnn'])
         self._metrics['test']['gnn']['loss'] += loss.item()
-        r2_loss = self._models['gnn'].metric(data, y_predicted, data.y_direct, self._r2_metric)
+        r2_loss = self._models['gnn'].metric(data, y_predicted, data.y_total, self._r2_metric)
         self._metrics['test']['gnn']['r2'] += r2_loss.item()
 
                     
@@ -231,35 +231,36 @@ class SimpleModelManager(ModelManager):
         self._optimizers['gnn'].zero_grad() 
         
         y_predicted = self._models['gnn'](data)
-        
-        # predict whole radiance
-        self._models['gnn'].radiance_from_predictions(y_predicted)
 
-        loss = self._models['gnn'].metric(data, y_predicted, data.y_direct, self._losses['gnn'])
+        loss = self._models['gnn'].metric(data, y_predicted, data.y_total, self._losses['gnn'])
         self._metrics['train']['gnn']['loss'] += loss.item()
-        r2_loss = self._models['gnn'].metric(data, y_predicted, data.y_direct, self._r2_metric)
-        self._metrics['train']['gnn']['r2'] += r2_loss.item()
         
         loss.backward()
         self._optimizers['gnn'].step()
+        
+        r2_loss = self._models['gnn'].metric(data, y_predicted, data.y_total, self._r2_metric)
+        self._metrics['train']['gnn']['r2'] += r2_loss.item()
         
         
     def predict(self, data, scalers) -> List[torch.Tensor]:
         
         y_predicted = self._models['gnn'](data).detach().cpu().numpy()
         
+        # predict whole radiance
+        y_radiance = self._models['gnn'].radiance_from_predictions(y_predicted)
+        
         # Radiance (indirect and direct) must be the 3 thirds features to predict
         y_total_target = data.y_total.detach().cpu().numpy()
         
         # no need to rescale input radiance
         input_radiance = data.direct_radiance.detach().cpu().numpy() + data.indirect_radiance.detach().cpu().numpy()
-        
+            
         # rescaled if necessary
         if scalers.get_scalers_from_field('y_total') is not None:
-            y_predicted = scalers.inverse_transform_field('y_total', y_predicted)
+            y_radiance = scalers.inverse_transform_field('y_total', y_radiance)
             y_total_target = scalers.inverse_transform_field('y_total', y_total_target)
                     
-        return input_radiance, y_predicted, y_total_target
+        return input_radiance, y_radiance, y_total_target
 
 
     def score(self, mode, metric='r2'):
@@ -313,9 +314,9 @@ class SeparatedModelManager(ModelManager):
         # retrieve expected radiance
         o_indirect_radiance = self._models['gnn'].radiance_from_predictions(o_predicted)
 
-        loss = self._models['gnn'].metric(data, o_predicted, data.y_direct, self._losses['gnn'])
+        loss = self._models['gnn'].metric(data, o_predicted, data.y_indirect, self._losses['gnn'])
         self._metrics['test']['gnn']['loss'] += loss.item()
-        r2_loss = self._models['gnn'].metric(data, o_predicted, data.y_direct, self._r2_metric)
+        r2_loss = self._models['gnn'].metric(data, o_predicted, data.y_indirect, self._r2_metric)
         self._metrics['test']['gnn']['r2'] += r2_loss.item()
         
         expected_radiance = Variable(data.y_direct.flatten() + data.y_indirect.flatten(), requires_grad=True)
@@ -355,9 +356,9 @@ class SeparatedModelManager(ModelManager):
         # retrieve expected radiance
         o_indirect_radiance = self._models['gnn'].radiance_from_predictions(o_predicted)
 
-        loss = self._models['gnn'].metric(data, o_predicted, data.y_direct, self._losses['gnn'])
+        loss = self._models['gnn'].metric(data, o_predicted, data.y_indirect, self._losses['gnn'])
         self._metrics['train']['gnn']['loss'] += loss.item()
-        r2_loss = self._models['gnn'].metric(data, o_predicted, data.y_direct, self._r2_metric)
+        r2_loss = self._models['gnn'].metric(data, o_predicted, data.y_indirect, self._r2_metric)
         self._metrics['train']['gnn']['r2'] += r2_loss.item()
         
         loss.backward()
