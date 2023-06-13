@@ -195,9 +195,9 @@ def main():
         viewpoint_dataset_paths = sorted([ os.path.join(viewpoint_path, p) for p in os.listdir(viewpoint_path) \
                     if 'metadata' not in p ])
           
-        pred_image = np.empty((h_size, w_size, 3)).astype("float32")
-        target_image = np.empty((h_size, w_size, 3)).astype("float32")
-        input_image = np.empty((h_size, w_size, 3)).astype("float32")
+        pred_image = np.zeros((h_size, w_size, 3)).astype("float32")
+        target_image = np.zeros((h_size, w_size, 3)).astype("float32")
+        input_image = np.zeros((h_size, w_size, 3)).astype("float32")
 
         n_predict = 0
         n_predictions = int(dataset_info["n_samples"])

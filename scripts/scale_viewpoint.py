@@ -42,7 +42,6 @@ def main():
     applied_transforms = GeoT.Compose(transforms_list)
     
     # prepare temp scaled datasets
-    viewpoint_name = os.path.split(viewpoint_path)[-1]
     viewpoint_scaled_subsets = []
     for viewpoint_filename in os.listdir(viewpoint_path):
         
@@ -51,7 +50,7 @@ def main():
         
         # load dataset and then perform scalers
         c_dataset = PathLightDataset(root=c_dataset_path)
-        c_scaled_dataset_path = os.path.join(temp_folder, viewpoint_name, dataset_name)
+        c_scaled_dataset_path = os.path.join(temp_folder, dataset_name)
         viewpoint_scaled_subsets.append(c_scaled_dataset_path)
         
         PathLightDataset(c_scaled_dataset_path, c_dataset, 

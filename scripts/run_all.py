@@ -69,7 +69,7 @@ def main():
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'train.py', 
-        '--dataset', f'{OUTPUT_DATASET}/datasets',
+        '--dataset', f'{OUTPUT_DATASET}',
         '--output', MODEL_FOLDER 
     ], check=True)
     
@@ -77,10 +77,19 @@ def main():
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'predict.py', 
-        '--scalers', f'{OUTPUT_DATASET}/datasets/scalers',
+        '--scalers', f'{OUTPUT_DATASET}/scalers',
         '--model', f'{MODEL_FOLDER}/model', 
-        '--data', f'{OUTPUT_DATASET}/datasets/data/test',
-        '--predictions', predictions_folder
+        '--data', f'{OUTPUT_DATASET}/data/test',
+        '--predictions', f'{predictions_folder}_test'
+    ], check=True)
+    
+    subprocess.run([
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
+        'python', 'predict.py', 
+        '--scalers', f'{OUTPUT_DATASET}/scalers',
+        '--model', f'{MODEL_FOLDER}/model', 
+        '--data', f'{OUTPUT_DATASET}/data/train',
+        '--predictions', f'{predictions_folder}_train'
     ], check=True)
 
 if __name__ == "__main__":

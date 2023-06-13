@@ -37,26 +37,15 @@ def main():
     dataset_percent   = MIGNNConf.DATASET_PERCENT
 
     os.makedirs(output_folder, exist_ok=True)
-    dataset_path = f'{output_folder}/datasets/data'
+    dataset_path = f'{output_folder}/data'
 
-    scalers_folder = f'{output_folder}/datasets/scalers'
+    scalers_folder = f'{output_folder}/scalers'
     
     # intermediates datasets when fitting scalers
-    output_temp_train = f'{output_folder}/datasets/intermediates/train'
-    output_temp_test = f'{output_folder}/datasets/intermediates/test'
-    
-    # same for scaled datasets
-    output_temp_scaled = f'{output_folder}/datasets/intermediates/scaled'
+    output_temp_scaled = f'{output_folder}/intermediates/scaled'
     os.makedirs(output_temp_scaled, exist_ok=True)
 
     if not os.path.exists(scalers_folder):
-                
-        # clear previous possible scaled data folders
-        if os.path.exists(output_temp_train):
-            shutil.rmtree(output_temp_train)
-        
-        if os.path.exists(output_temp_test):
-            shutil.rmtree(output_temp_test)
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
