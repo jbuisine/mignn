@@ -11,6 +11,26 @@ from mignn.dataset import PathLightDataset
 import config as MIGNNConf
 from models.manager import ManagerFactory
 from models.param import ModelParam
+from collections import Counter
+import operator
+import functools
+
+def extract_datasets(viewpoints_dataset_folder):
+    
+    dicts = []
+    datasets_files = []
+    for viewpoint in os.listdir(viewpoints_dataset_folder):
+        viewpoint_path = os.path.join(viewpoints_dataset_folder, viewpoint)
+        info = json.load(open(f'{viewpoint_path}/metadata', 'r', encoding='utf-8'))
+        dicts.append(Counter(info))
+        
+        # collect all chunked dataset
+        for v_file in [ p for p in os.listdir(viewpoint_path) if 'metadata' not in p ]:
+            datasets_files.append(os.path.join(viewpoint_path, v_file))
+        
+    global_info = dict(functools.reduce(operator.add, map(Counter, dicts)))
+    
+    return global_info, datasets_files
 
 def main():
 
@@ -36,17 +56,11 @@ def main():
     train_folder = f'{dataset_path}/data/train'
     test_folder = f'{dataset_path}/data/test'
     
-    # avoid metadata file
-    dataset_train_paths = [ os.path.join(train_folder, p) for p in os.listdir(train_folder) \
-                    if 'metadata' not in p ]
-    dataset_test_paths = [ os.path.join(test_folder, p) for p in os.listdir(test_folder) \
-                    if 'metadata' not in p ]
-    
-    train_info = json.load(open(f'{dataset_path}/data/train/metadata', 'r', encoding='utf-8'))
-    test_info = json.load(open(f'{dataset_path}/data/test/metadata', 'r', encoding='utf-8'))
+    # retrieve total train info
+    train_info, train_datasets = extract_datasets(train_folder)
+    test_info, test_datasets = extract_datasets(test_folder)
     
     train_n_batchs = int(train_info['n_batchs'])
-    # test_n_batchs = int(test_info['n_batchs'])
     
     print(f'[Information] train dataset composed of: {train_info["n_samples"]} graphs')
     print(f'[Information] test dataset composed of: {test_info["n_samples"]} graphs')
@@ -55,11 +69,14 @@ def main():
     
     # camera features size
     enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
+    
+    # compute number of node features
+    n_node_features = sum(enc_mask['x_node']) * enc_size * 2 + len(enc_mask['x_node'])
+    
+    # compute number of camera features
     n_camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
         + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
         
-    n_node_features = int(train_info['n_node_features'])
-    
     model_manager = ManagerFactory.create(n_node_features, n_camera_features, MIGNNConf)
     
     # END INSTANTIATE THE MODEL MANAGER
@@ -142,8 +159,8 @@ def main():
     
     for epoch in range(start_epoch, n_epochs + 1):
         
-        train(epoch, dataset_train_paths, train_n_batchs)
-        test(dataset_test_paths)
+        train(epoch, train_datasets, train_n_batchs)
+        test(test_datasets)
         
         test_r2 = model_manager.score('test')
         

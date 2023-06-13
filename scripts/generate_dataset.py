@@ -3,6 +3,7 @@ import argparse
 import shutil
 import random
 import numpy as np
+from itertools import chain
 
 from mignn.dataset import PathLightDataset
 
@@ -14,8 +15,7 @@ from joblib import load as skload
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import merge_by_chunk
-from utils import scale_subset
+from utils import scale_viewpoint_and_merge
 
 from mignn.processing import ScalerTransform, SignalEncoder
 from mignn.processing.scalers import ScalersManager
@@ -34,9 +34,7 @@ def main():
     input_containers  = args.data
 
     # Some MIGNN params 
-    split_percent     = MIGNNConf.TRAINING_SPLIT
     dataset_percent   = MIGNNConf.DATASET_PERCENT
-
 
     os.makedirs(output_folder, exist_ok=True)
     dataset_path = f'{output_folder}/datasets/data'
@@ -62,162 +60,108 @@ def main():
 
         # save intermediate PathLightDataset
         # Then fusion PathLightDatasets into only one
-        # ensure file orders?
-        intermediate_datasets_path = sorted(os.listdir(input_containers))
-        random.shuffle(intermediate_datasets_path)
+        train_viewpoints = os.path.join(input_containers, 'train')
+        test_viewpoints = os.path.join(input_containers, 'test')
         
         # initialize scalers from config using manager 
         scalers = ScalersManager(config=MIGNNConf.NORMALIZERS)
         
-        print(f'[Processing] fit scalers from {split_percent * 100}% of graphs (training set)')
+        train_viewpoints_folder = [ os.path.join(train_viewpoints, v_name) for v_name in os.listdir(train_viewpoints) ]
+        test_viewpoints_folder = [ os.path.join(test_viewpoints, v_name) for v_name in os.listdir(test_viewpoints) ]
         
-        # prepare splitting of train and test dataset
-        os.makedirs(output_temp_train, exist_ok=True)
-        os.makedirs(output_temp_test, exist_ok=True)
-
-        # compute scalers using partial fit and respecting train dataset
-        n_graphs = 0
-        n_train_graphs = 0
-        
-        train_data = []
-        test_data = []
+        n_train_viewpoints = len(train_viewpoints_folder)
+        print(f'[Processing] fit scalers on {n_train_viewpoints} viewpoints')
         
         if not scalers.enable_partial:
             raise AttributeError('[Unsupported] specified normalizers require the storage of all training data. \
                 This can cause a memory surge.')
+            
+        # retrieve all containers filename
+        train_viewpoints_files = list(chain(*[
+                [ os.path.join(viewpoint_path, c_file) for c_file in os.listdir(viewpoint_path) ]
+                for viewpoint_path in train_viewpoints_folder
+            ]))
         
-        n_intermediates_unscaled = len(intermediate_datasets_path)
+        n_graphs = 0
         
-        for idx, dataset_name in enumerate(intermediate_datasets_path):
-                
-            c_dataset_path = os.path.join(input_containers, dataset_name)
+        for idx, c_dataset_path in enumerate(train_viewpoints_files):
+            
             subset = PathLightDataset(root=c_dataset_path)
 
             # record data
-            n_elements = len(subset)
-            n_graphs += n_elements
-            
-            # split data into training and testing set
-            split_index = int(n_elements * split_percent)
-            n_train_graphs += split_index
-            
-            # create train and test datasets
-            temp_train_path = os.path.join(output_temp_train, dataset_name)
-            temp_test_path = os.path.join(output_temp_test, dataset_name)
-                    
-            # shuffle data
-            indices = np.arange(n_elements)
-            np.random.shuffle(indices)
-            train_indices = indices[:split_index]
-            
-            # fill data
-            for i in range(n_elements):
-                
-                # keep or not current data
-                if random.random() <= dataset_percent:
-                    
-                    if i in train_indices:
-                        train_data.append(subset[i]) 
-                    else: 
-                        test_data.append(subset[i])
-                    
-            # save intermediate dataset
-            intermediate_train_dataset = PathLightDataset(temp_train_path, train_data)
-            # only save
-            PathLightDataset(temp_test_path, test_data, load=False) 
+            n_graphs += len(subset)
             
             # partial fit on train set when possible
-            scalers.partial_fit(intermediate_train_dataset)
+            scalers.partial_fit(subset)
                 
-            # reset train data list if necessary
-            if scalers.enable_partial:
-                train_data = []
+            # # reset train data list if necessary
+            # if scalers.enable_partial:
+            #     train_data = []
             
-            # always clear test data
-            test_data = []
+            # # always clear test data
+            # test_data = []
             
-            print(f'[Processing] fit scalers progress: {(idx + 1) / n_intermediates_unscaled * 100.:.2f}%', end='\r')
-            
-        print(f'[Information] managed {n_graphs} graphs (train: {int(n_train_graphs * dataset_percent)}, test: {(n_graphs - n_train_graphs) * dataset_percent}).')    
+            print(f'[Processing] fit scalers progress: {(idx + 1) / len(train_viewpoints_files) * 100.:.2f}%', end='\r')
+                
+        print(f'[Information] {n_graphs} graphs have been managed.')    
         
         # For the moment we avoid total fit scalers and raise issue
         # ensure normalization using scalers with no partial fit method
-        if not scalers.enable_partial:
+        # if not scalers.enable_partial:
             
-            c_dataset, _ = PathLightDataset.collate(train_data)
-            scalers.fit(c_dataset)
+        #     c_dataset, _ = PathLightDataset.collate(train_data)
+        #     scalers.fit(c_dataset)
             
         # save scalers
         os.makedirs(scalers_folder, exist_ok=True)
         
         skdump(scalers, f'{scalers_folder}/scalers.bin', compress=True)
 
-    # reload scalers    
-    scalers = skload(f'{scalers_folder}/scalers.bin')
-        
-    transforms_list = [ScalerTransform(scalers)]
-    
-    if MIGNNConf.ENCODING_SIZE is not None:
-        print('[Scaling (with encoding)] start preparing encoded scaled data...')
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
-    else:
-        print('[Scaling] start preparing scaled data...')
-    applied_transforms = GeoT.Compose(transforms_list)    
+    # reload scalers 
+    scalers_path = f'{scalers_folder}/scalers.bin'   
+    print('[Scaling] start preparing scaled data...') 
 
     # applied transformations over all intermediate path light dataset
     # avoid memory overhead
     if not os.path.exists(f'{dataset_path}/train'):
         
         output_scaled_temp_train = f'{output_temp_scaled}/train'
-        os.makedirs(output_scaled_temp_train, exist_ok=True)
-        
         output_scaled_temp_test = f'{output_temp_scaled}/test'
+        os.makedirs(output_scaled_temp_train, exist_ok=True)
         os.makedirs(output_scaled_temp_test, exist_ok=True)
         
-        # concat train and test intermediate datasets with expected output
-        intermediate_datasets_path = [ (output_scaled_temp_train, os.path.join(output_temp_train, p)) \
-                                    for p in sorted(os.listdir(output_temp_train)) ]
-        intermediate_datasets_path += [ (output_scaled_temp_test, os.path.join(output_temp_test, p)) \
-                                    for p in sorted(os.listdir(output_temp_test)) ]
-        
-        # separate expected output and where to intermediate dataset path
-        output_scaled, datasets_path = list(zip(*intermediate_datasets_path))
-        
-        n_intermediates = len(intermediate_datasets_path)
-        intermediate_scaled_datasets_path = []
-        
-        # multi-process scale of dataset
-        pool_obj_scaled = ThreadPool()
-    
-        scaled_params = list(zip(datasets_path,
-                    [ scalers_folder for _ in range(n_intermediates) ],
-                    output_scaled
-                ))
-        
-        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
-            intermediate_scaled_datasets_path.append(result)
-            
-        # create output train and test folders
         train_dataset_path = f'{dataset_path}/train'
         test_dataset_path = f'{dataset_path}/test'
         os.makedirs(train_dataset_path, exist_ok=True)
         os.makedirs(test_dataset_path, exist_ok=True)
         
-        # print(f'[Before merging] memory usage is: {psutil.virtual_memory().percent}%')
+        # create params (train and test)
+        viewpoints_params = list([
+                (
+                    viewpoint_path,
+                    scalers_path,
+                    os.path.join(output_scaled_temp_train, os.path.split(viewpoint_path)[-1]),
+                    os.path.join(train_dataset_path, os.path.split(viewpoint_path)[-1])
+                ) 
+            for viewpoint_path in train_viewpoints_folder
+        ])
         
-        # call merge by chunk for each scaled train and test subsets
-        scaled_train_subsets = [ os.path.join(output_scaled_temp_train, p) \
-                    for p in sorted(os.listdir(output_scaled_temp_train)) ]
-        scaled_test_subsets = [ os.path.join(output_scaled_temp_test, p) \
-            for p in sorted(os.listdir(output_scaled_temp_test)) ]
-        
-        # merged data into expected chunk size
-        merge_by_chunk('train', scaled_train_subsets, train_dataset_path, applied_transforms)
-        merge_by_chunk('test', scaled_test_subsets, test_dataset_path, applied_transforms)
-                 
-        # print('[Cleaning] clear intermediates saved datasets...')
-        # os.system(f'rm -r {output_temp}') 
-        # os.system(f'rm -r {output_temp_scaled}') 
+        viewpoints_params += list([
+                (
+                    viewpoint_path,
+                    scalers_path,
+                    os.path.join(output_scaled_temp_test, os.path.split(viewpoint_path)[-1]),
+                    os.path.join(test_dataset_path, os.path.split(viewpoint_path)[-1])
+                ) 
+            for viewpoint_path in test_viewpoints_folder
+        ])
+    
+        # multi-process scale of dataset
+        pool_obj_scaled = ThreadPool()
+        pool_results = []
+    
+        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_viewpoint_and_merge, viewpoints_params), total=len(viewpoints_params)):
+            pool_results.append(result)
     else:
         print(f'[Information] {dataset_path} already generated')
  

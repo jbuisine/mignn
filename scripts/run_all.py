@@ -33,23 +33,33 @@ def main():
     
     MODEL_FOLDER = os.path.join(f'{output_model}', 'model')
 
-    TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints'
+    TRAIN_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_train'
     TEST_VIEWPOINTS = f'../notebooks/scenes/{MIGNNConf.SCENE_NAME}/viewpoints_test'
     
     print(f'[Information] results will be saved into: `{OUTPUT_DATA}`')    
     
     # run data generation
     subprocess.run([
-        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}',
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}',
         'python', 'prepare_data.py',
         '--scene', SCENE_FILE,
         '--output', OUTPUT_DATA,
-        '--sensors', TRAIN_VIEWPOINTS
+        '--sensors', TRAIN_VIEWPOINTS,
+        '--mode', 'train'
+    ], check=True)
+    
+    subprocess.run([
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}',
+        'python', 'prepare_data.py',
+        '--scene', SCENE_FILE,
+        '--output', OUTPUT_DATA,
+        '--sensors', TEST_VIEWPOINTS,
+        '--mode', 'test'
     ], check=True)
     
     # Run dataset generation
     subprocess.run([
-        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}',
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}',
         'python', 'generate_dataset.py',
         '--data', f'{OUTPUT_DATA}/containers',
         '--output', OUTPUT_DATASET,
@@ -57,22 +67,20 @@ def main():
     
     # Run train model
     subprocess.run([
-        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_GEN_AND_TRAIN}', 
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'train.py', 
         '--dataset', f'{OUTPUT_DATASET}/datasets',
         '--output', MODEL_FOLDER 
     ], check=True)
     
-    # Run predictions from model
+    # # Run predictions from model
     subprocess.run([
-        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES_PREDICT}', 
+        'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'predict.py', 
-        '--scene', SCENE_FILE, 
         '--scalers', f'{OUTPUT_DATASET}/datasets/scalers',
         '--model', f'{MODEL_FOLDER}/model', 
-        '--output', OUTPUT_PREDICT,
-        '--predictions', predictions_folder, 
-        '--sensors', TEST_VIEWPOINTS
+        '--data', f'{OUTPUT_DATASET}/datasets/data/test',
+        '--predictions', predictions_folder
     ], check=True)
 
 if __name__ == "__main__":

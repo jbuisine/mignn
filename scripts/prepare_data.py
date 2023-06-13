@@ -18,12 +18,14 @@ def main():
     parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--output', type=str, help="output data folder", required=True)
     parser.add_argument('--sensors', type=str, help="file with all viewpoints on scene", required=True)
+    parser.add_argument('--mode', type=str, help="train or test mode data generation", choices=['train', 'test'], required=True)
     
     args = parser.parse_args()
 
     scene_file        = args.scene
     output_folder     = args.output
     sensors_folder    = args.sensors
+    mode              = args.mode
 
     # Some MIGNN params 
     w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
@@ -47,24 +49,24 @@ def main():
         # Multiple GNN files will be generated
         for _ in range(sensors_n_samples):
             sensors.append(sensor)
-            viewpoints.append(v_filename)
+            viewpoints.append(v_filename.replace('.txt', ''))
 
     # multiple datasets to avoid memory overhead
-    output_gnn_data = f'{output_folder}/containers'
-    output_rendering_data = f'{output_folder}/rendering'
+    output_gnn_data = f'{output_folder}/containers/{mode}'
+    output_rendering_data = f'{output_folder}/rendering/{mode}'
     
     if not os.path.exists(output_rendering_data):
         
-        print('[Data generation] start generating GNN data using Mistuba3')
+        print(f'[Data generation: {mode}] start generating GNN data using Mistuba3')
         gnn_folders = prepare_data(scene_file,
-                                viewpoints=viewpoints,
+                                viewpoints = viewpoints,
                                 integrator = MIGNNConf.INTEGRATOR,
                                 max_depth = MIGNNConf.MAX_DEPTH,
                                 ref_spp = MIGNNConf.REF_SPP,
                                 sensors = sensors,
-                                output_folder = f'{output_folder}/rendering')
+                                output_folder = output_rendering_data)
         
-        print('\n[Data loading] loading generated data from Mistuba3')
+        print(f'\n[Data loading: {mode}] loading generated data from Mistuba3')
         
     if not os.path.exists(output_gnn_data):
         
@@ -76,22 +78,27 @@ def main():
         
         pool_obj = ThreadPool()
 
-        gnn_files = list(chain(*list([
-                [ os.path.join(folder, g_file) for g_file in os.listdir(folder) ] 
+        gnn_params = list(chain(*list([
+                [ 
+                    (
+                        os.path.join(folder, g_file), 
+                        os.path.join(output_gnn_data, os.path.split(folder)[-1])
+                    ) 
+                    for g_file in os.listdir(folder) 
+                ] 
                 for folder in gnn_folders 
             ])))
+        # print(gnn_folders)
         
         # load in parallel same scene file, imply error. Here we load multiple scenes
-        params = list(zip(gnn_files,
-                    [ output_gnn_data for _ in range(len(gnn_files)) ],
-                ))
+        # params = list(zip(gnn_files, gnn_folders))
 
         build_containers = []
-        for result in tqdm.tqdm(pool_obj.imap(load_and_save, params), total=len(params)):
+        for result in tqdm.tqdm(pool_obj.imap(load_and_save, gnn_params), total=len(gnn_params)):
             build_containers.append(result)
     
     else:
-        print('[Data generation] data already generated')
+        print(f'[Data generation: {mode}] data already generated')
 
 if __name__ == "__main__":
     main()

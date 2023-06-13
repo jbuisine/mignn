@@ -392,8 +392,6 @@ class SeparatedModelManager(ModelManager):
         y_predicted = self._models['gnn'](data)
         y_indirect_predicted = self._models['gnn'].radiance_from_predictions(y_predicted).detach().cpu().numpy()
         
-        # Specific case: predicted encoded viewpoint information
-        
         # Radiance (indirect and direct) must be the 3 thirds features to predict
         y_total_target = data.y_total.detach().cpu().numpy()
         input_radiance = data.direct_radiance.detach().cpu().numpy() + data.indirect_radiance.detach().cpu().numpy()

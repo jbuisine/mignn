@@ -2,7 +2,6 @@ import os
 import argparse
 import json
 import numpy as np
-from itertools import chain
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
@@ -12,19 +11,12 @@ from mignn.dataset import PathLightDataset
 import torch
 from joblib import load as skload
 
-from utils import prepare_data, scale_subset, merge_by_chunk
-from utils import load_sensor_from, load_and_save
 import matplotlib.pyplot as plt
 
-import tqdm
-from multiprocessing.pool import ThreadPool
 from skimage.metrics import mean_squared_error as MSE
 from skimage.metrics import structural_similarity as SSIM
 
 from PIL import Image
-
-import torch_geometric.transforms as GeoT
-from mignn.processing import ScalerTransform, SignalEncoder
 
 from models.manager import ManagerFactory
 
@@ -37,166 +29,172 @@ warnings.filterwarnings('ignore')
 def main():
 
     parser = argparse.ArgumentParser(description="Train model from multiple viewpoints")
-    parser.add_argument('--scene', type=str, help="mitsuba xml scene file", required=True)
     parser.add_argument('--scalers', type=str, help="where to find data scalers", required=True)
     parser.add_argument('--model', type=str, help="where to find saved model", required=True)
-    parser.add_argument('--output', type=str, help="output data folder", required=True)
+    parser.add_argument('--data', type=str, help="viewpoints data", required=True)
     parser.add_argument('--predictions', type=str, help="output predictions folder", required=True)
-    parser.add_argument('--sensors', type=str, help="specific sensors folder", required=True)
     
     args = parser.parse_args()
 
-    scene_file         = args.scene
     scalers_folder     = args.scalers
     model_folder       = args.model
-    output_folder      = args.output
+    viewpoints_data    = args.data
     predictions_folder = args.predictions
-    sensors_folder     = args.sensors
     
     # MIGNN param
-    w_size, h_size    = MIGNNConf.PRED_VIEWPOINT_SIZE
+    w_size, h_size    = MIGNNConf.VIEWPOINT_SIZE
     
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    viewpoints = [ os.path.join(viewpoints_data, v_name) for v_name in os.listdir(viewpoints_data) ]
+    
     # use of: https://github.com/prise-3d/vpbrt
     # read from camera LookAt folder
-    sensors = []
-    viewpoints = []
-    for file in sorted(os.listdir(sensors_folder)):
-        file_path = os.path.join(sensors_folder, file)
-        viewpoint_name = file.split('.')[0]
-        sensor = load_sensor_from((w_size, h_size),
-                                sensor_file=file_path,
-                                integrator=MIGNNConf.INTEGRATOR, 
-                                gnn_until=MIGNNConf.GNN_SPP, 
-                                gnn_nodes=MIGNNConf.N_NODES_PER_GRAPHS, 
-                                gnn_neighbors=MIGNNConf.N_NEIGHBORS)
-        
-        sensors.append(sensor)
-        viewpoints.append(viewpoint_name)
-
-
-    predictions = []
-    references = []
-    low_res_images = []
-
-    gnn_folders = prepare_data(scene_file,
-                viewpoints=viewpoints,
-                integrator = MIGNNConf.INTEGRATOR,
-                max_depth = MIGNNConf.MAX_DEPTH,
-                ref_spp = MIGNNConf.REF_SPP,
-                sensors = sensors,
-                output_folder = f'{output_folder}/generated')
-
-    output_temp = f'{output_folder}/datasets/temp/'
-    output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
-            
-    print('[Processing] extract generated data for each viewpoint')
     
-    if not os.path.exists(output_temp):
-        os.makedirs(output_temp, exist_ok=True)
-
-        datasets_params = list(chain.from_iterable([ 
-                [ 
-                    (
-                        os.path.join(v_name, v_subset),
-                        os.path.join(output_temp, viewpoints[v_i])
-                    )
-                    # need to sort file in order to preserve pixels order
-                    for v_subset in sorted(os.listdir(v_name))
-                ] 
-                for v_i, v_name in enumerate(sorted(gnn_folders))
-            ]))
+    # for file in sorted(os.listdir(sensors_folder)):
+    #     file_path = os.path.join(sensors_folder, file)
+    #     viewpoint_name = file.split('.')[0]
+    #     sensor = load_sensor_from((w_size, h_size),
+    #                             sensor_file=file_path,
+    #                             integrator=MIGNNConf.INTEGRATOR, 
+    #                             gnn_until=MIGNNConf.GNN_SPP, 
+    #                             gnn_nodes=MIGNNConf.N_NODES_PER_GRAPHS, 
+    #                             gnn_neighbors=MIGNNConf.N_NEIGHBORS)
         
-        # multi-process scale of dataset
-        pool_obj_scaled = ThreadPool()
+    #     sensors.append(sensor)
+    #     viewpoints.append(viewpoint_name)
 
-        intermediate_datasets_path = []
-        for result in tqdm.tqdm(pool_obj_scaled.imap(load_and_save, datasets_params), total=len(datasets_params)):
-            intermediate_datasets_path.append(result)
+
+    # predictions = []
+    # references = []
+    # low_res_images = []
+
+    # gnn_folders = prepare_data(scene_file,
+    #             viewpoints=viewpoints,
+    #             integrator = MIGNNConf.INTEGRATOR,
+    #             max_depth = MIGNNConf.MAX_DEPTH,
+    #             ref_spp = MIGNNConf.REF_SPP,
+    #             sensors = sensors,
+    #             output_folder = f'{output_folder}/generated')
+
+    # output_temp = f'{output_folder}/datasets/temp/'
+    # output_temp_scaled = f'{output_folder}/datasets/temp_scaled/'
             
-    print('[Processing] scaling all subsets using saved model scalers')
+    # print('[Processing] extract generated data for each viewpoint')
+    
+    # if not os.path.exists(output_temp):
+    #     os.makedirs(output_temp, exist_ok=True)
+
+    #     datasets_params = list(chain.from_iterable([ 
+    #             [ 
+    #                 (
+    #                     os.path.join(v_name, v_subset),
+    #                     os.path.join(output_temp, viewpoints[v_i])
+    #                 )
+    #                 # need to sort file in order to preserve pixels order
+    #                 for v_subset in sorted(os.listdir(v_name))
+    #             ] 
+    #             for v_i, v_name in enumerate(sorted(gnn_folders))
+    #         ]))
+        
+    #     # multi-process scale of dataset
+    #     pool_obj_scaled = ThreadPool()
+
+    #     intermediate_datasets_path = []
+    #     for result in tqdm.tqdm(pool_obj_scaled.imap(load_and_save, datasets_params), total=len(datasets_params)):
+    #         intermediate_datasets_path.append(result)
+            
+    # print('[Processing] scaling all subsets using saved model scalers')
     
     # reload scalers        
     scalers = skload(f'{scalers_folder}/scalers.bin')            
 
-    transforms_list = [ScalerTransform(scalers)]
+    # transforms_list = [ScalerTransform(scalers)]
     
-    if MIGNNConf.ENCODING_SIZE is not None:
-        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
+    # if MIGNNConf.ENCODING_SIZE is not None:
+    #     transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
 
-    applied_transforms = GeoT.Compose(transforms_list)    
+    # applied_transforms = GeoT.Compose(transforms_list)    
         
-    if not os.path.exists(output_temp_scaled):
-        os.makedirs(output_temp_scaled, exist_ok=True)
+    # if not os.path.exists(output_temp_scaled):
+    #     os.makedirs(output_temp_scaled, exist_ok=True)
 
-        scaled_params = list(chain.from_iterable([ 
-                [ 
-                    (
-                        os.path.join(output_temp, viewpoints[v_i], v_subset), 
-                        scalers_folder,
-                        os.path.join(output_temp_scaled, viewpoints[v_i])
-                    )
-                    # need to sort file in order to preserve pixels order
-                    for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name)))
-                ] 
-                for v_i, v_name in enumerate(sorted(os.listdir(output_temp)))
-            ]))
+    #     scaled_params = list(chain.from_iterable([ 
+    #             [ 
+    #                 (
+    #                     os.path.join(output_temp, viewpoints[v_i], v_subset), 
+    #                     scalers_folder,
+    #                     os.path.join(output_temp_scaled, viewpoints[v_i])
+    #                 )
+    #                 # need to sort file in order to preserve pixels order
+    #                 for v_subset in sorted(os.listdir(os.path.join(output_temp, v_name)))
+    #             ] 
+    #             for v_i, v_name in enumerate(sorted(os.listdir(output_temp)))
+    #         ]))
         
-        # multi-process scale of dataset
-        pool_obj_scaled = ThreadPool()
+    #     # multi-process scale of dataset
+    #     pool_obj_scaled = ThreadPool()
 
-        intermediate_scaled_datasets_path = []
-        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
-            intermediate_scaled_datasets_path.append(result)
+    #     intermediate_scaled_datasets_path = []
+    #     for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, scaled_params), total=len(scaled_params)):
+    #         intermediate_scaled_datasets_path.append(result)
         
-    print('[Processing] prepare chunked datasets for each viewpoint')
+    # print('[Processing] prepare chunked datasets for each viewpoint')
 
-    datasets_path = []
-    for v_i, viewpoint in enumerate(viewpoints):
+    # datasets_path = []
+    # for v_i, viewpoint in enumerate(viewpoints):
         
-        # split there into memory chunked datasets
-        scaled_path = os.path.join(output_temp_scaled, viewpoint)
-        scaled_subsets = sorted([ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ])
-        c_output_folder = f'{output_folder}/datasets/chuncks/{viewpoint}_chunks'
+    #     # split there into memory chunked datasets
+    #     scaled_path = os.path.join(output_temp_scaled, viewpoint)
+    #     scaled_subsets = sorted([ os.path.join(scaled_path, p) for p in os.listdir(scaled_path) ])
+    #     c_output_folder = f'{output_folder}/datasets/chuncks/{viewpoint}_chunks'
         
-        # chunk subsets
-        if not os.path.exists(c_output_folder):
-            merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
+    #     # chunk subsets
+    #     if not os.path.exists(c_output_folder):
+    #         merge_by_chunk(viewpoint, scaled_subsets, c_output_folder, applied_transforms)
         
-        datasets_path.append(c_output_folder)
+    #     datasets_path.append(c_output_folder)
     
     #print('[Cleaning] clear intermediated saved containers')
     #os.system(f'rm -r {output_temp}')
     #os.system(f'rm -r {output_temp_scaled}')
+    
+    # camera features size
+    enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
+    
+    # compute number of node features
+    n_node_features = sum(enc_mask['x_node']) * enc_size * 2 + len(enc_mask['x_node'])
+    
+    # compute number of camera features
+    n_camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
+        + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
+    
+    # [INSTANTIATE] Model manager
+    model_manager = ManagerFactory.create(n_node_features, n_camera_features, MIGNNConf)
+    model_manager.load(model_folder)
+    
+    # turn models into eval mode
+    model_manager.eval()
+    
+    print('[Information] model loaded...')
+
+    predictions = []
+    references = []
+    low_res_images = []
     os.makedirs(predictions_folder, exist_ok=True)
     
-    for v_i, sensor in enumerate(sensors):
+    for v_i, viewpoint_path in enumerate(viewpoints):
 
-        dataset_path = datasets_path[v_i]
-        viewpoint_name = viewpoints[v_i]
+        viewpoint_name = os.path.split(viewpoint_path)[-1]
 
         print(f'[Prediction for viewpoint n°{v_i}: {viewpoint_name}]')
 
-        dataset_info = json.load(open(f'{dataset_path}/metadata', 'r', encoding='utf-8'))
-        n_node_features = int(dataset_info['n_node_features'])
+        dataset_info = json.load(open(f'{viewpoint_path}/metadata', 'r', encoding='utf-8'))
         
-        viewpoint_dataset_paths = sorted([ os.path.join(dataset_path, p) for p in os.listdir(dataset_path) \
+        viewpoint_dataset_paths = sorted([ os.path.join(viewpoint_path, p) for p in os.listdir(viewpoint_path) \
                     if 'metadata' not in p ])
-
-        enc_mask, enc_size = MIGNNConf.ENCODING_MASK, MIGNNConf.ENCODING_SIZE
-        n_camera_features = sum(enc_mask['origin']) * enc_size * 2 + sum(enc_mask['origin']) \
-            + sum(enc_mask['direction']) * enc_size * 2 + sum(enc_mask['direction'])
-            
-        # [INSTANTIATE] Model manager
-        model_manager = ManagerFactory.create(n_node_features, n_camera_features, MIGNNConf)
-        model_manager.load(model_folder)
-        
-        # turn models into eval mode
-        model_manager.eval()
-    
+          
         pred_image = np.empty((h_size, w_size, 3)).astype("float32")
         target_image = np.empty((h_size, w_size, 3)).astype("float32")
         input_image = np.empty((h_size, w_size, 3)).astype("float32")

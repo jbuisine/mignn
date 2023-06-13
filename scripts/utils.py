@@ -126,38 +126,38 @@ def load_and_save(params):
     return True
 
 
-def scale_subset(params):
+def scale_viewpoint_and_merge(params):
 
-    dataset_path, scalers_path, output_temp_scaled = params
+    viewpoint_path, scalers_path, output_temp_scaled, output_dataset = params
 
     # [Important] this task cannot be done by multiprocess, need to be done externaly
-    process = subprocess.Popen(["python", "scale_subset.py", \
-        "--dataset", dataset_path, \
+    process = subprocess.Popen(["python", "scale_viewpoint.py", \
+        "--viewpoint", viewpoint_path, \
         "--scalers", scalers_path, \
-        "--output", output_temp_scaled])
+        "--temp", output_temp_scaled, \
+        "--output", output_dataset])
     process.wait()
     
-    _, dataset_name = os.path.split(dataset_path)
+    return True
 
-    return os.path.join(output_temp_scaled, dataset_name)
-
-def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_transforms):
+def merge_by_chunk(scaled_datasets_path, output_path, applied_transforms):
     
     memory_sum = 0
     memory_size_in_bytes = MIGNNConf.DATASET_CHUNK * (1024 ** 2)
     
     data_list = []
     
-    n_subsets = len(scaled_datasets_path)
-    step = (n_subsets // 100) + 1
+    # n_subsets = len(scaled_datasets_path)
+    # step = (n_subsets // 100) + 1
     
     # also store metadata file
     n_batchs = 0
     n_samples = 0
-    n_node_features = None
-    n_target_features = None
+    # n_node_features = None
+    # n_target_features = None
     n_saved = 0
-    for idx, scaled_dataset_path in enumerate(sorted(scaled_datasets_path)):
+    # for _, scaled_dataset_path in enumerate(sorted(scaled_datasets_path)):
+    for scaled_dataset_path in sorted(scaled_datasets_path):
         
         # TODO: check if really required to get pre_transform param
         c_scaled_dataset = PathLightDataset(root=scaled_dataset_path, 
@@ -165,9 +165,9 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
         
         n_current_samples = len(c_scaled_dataset)
         
-        if n_node_features is None:
-            n_node_features = c_scaled_dataset.num_node_features
-            n_target_features = c_scaled_dataset.num_target_features
+        # if n_node_features is None:
+        #     n_node_features = c_scaled_dataset.num_node_features
+        #     n_target_features = c_scaled_dataset.num_target_features
         
         for c_data_i in range(n_current_samples):
             data = c_scaled_dataset[c_data_i]
@@ -207,9 +207,9 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
         # clear memory
         del c_scaled_dataset
         
-        if (idx % step == 0 or idx >= n_subsets - 1):
-            print(f'[Prepare {output_name} dataset (with chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
-                end='\r' if idx + 1 < n_subsets else '\n')
+        # if (idx % step == 0 or idx >= n_subsets - 1):
+        #     print(f'[Prepare {output_name} dataset (with chunks of: {MIGNNConf.DATASET_CHUNK} Mo)] -- progress: {(idx + 1) / n_subsets * 100.:.0f}%', \
+        #         end='\r' if idx + 1 < n_subsets else '\n')
         
     # do last save if needed    
     if len(data_list) > 0:
@@ -231,8 +231,8 @@ def merge_by_chunk(output_name, scaled_datasets_path, output_path, applied_trans
     metadata = { 
         'n_samples': n_samples, 
         'n_batchs': n_batchs,
-        'n_node_features': n_node_features,
-        'n_target_features': n_target_features,
+        # 'n_node_features': n_node_features,
+        # 'n_target_features': n_target_features,
     }
     
     with open(f'{output_path}/metadata', 'w', encoding='utf-8') as outfile:

@@ -28,8 +28,14 @@ def main():
     # read graphs data from this subset
     graphs_data = load_and_convert(gnn_filepath)
     
+    # TODO: keep only valid graphs (need to check images: during rendering avoid use of empty graph too)
+    kept_graphs = []
+    for graph in graphs_data:
+        if graph.x.size()[0] > 0:
+            kept_graphs.append(graph)
+    
     # save dataset
-    PathLightDataset(sub_dataset_path, graphs_data)
+    PathLightDataset(sub_dataset_path, kept_graphs)
 
 if __name__ == "__main__":
     main()

@@ -1,13 +1,13 @@
 """Config training module"""
 # generated rendering params 
 # scene store into `../notebooks/scenes`
-# Must be composed of `viewpoints` and `viewpoints_test` folders
-SCENE_NAME            = "teapot-double" 
+# Must be composed of `viewpoints_train` and `viewpoints_test` folders
+SCENE_NAME            = "living-room-reduced" 
 INTEGRATOR            = "pathgnn"
 REF_SPP               = 1000
 GNN_SPP               = 20
 MAX_DEPTH             = 5
-VIEWPOINT_SIZE        = 512, 512
+VIEWPOINT_SIZE        = 128, 128
 VIEWPOINT_SAMPLES     = 1
 
 # [Build connections params]
@@ -16,10 +16,8 @@ N_NEIGHBORS           = 20
 
 # [Dataset generation and performances params]
 # reduce memory usage while generating dataset
-N_CORES_GEN_AND_TRAIN = 15
-N_CORES_PREDICT       = 11
+N_CORES               = 15
 DATASET_CHUNK         = 200 # max size in Mo
-SCENE_REVERSE         = True # specify if width and height are reversed or not
 
 # [Model params]
 # NeRF: {simple: SimpleNeRF}
@@ -100,9 +98,8 @@ ENCODING_MASK         = {
 # percentage of data to keep into train and test subsets (by default all)
 # usefull when images are in high resolution
 DATASET_PERCENT       = 1
-TRAINING_SPLIT        = 0.8
 BATCH_SIZE            = 128
 EPOCHS                = 20
 
 # [Predictions params]
-PRED_VIEWPOINT_SIZE   = 512, 512
+PRED_VIEWPOINT_SIZE   = 128, 128

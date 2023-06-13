@@ -19,8 +19,11 @@ class ScalerTransform(BaseTransform):
         # perform scale of data (if scalers exists)
         if 'x_node' in self._fields:
             x_scalers = self._scalers.get_scalers_from_field('x_node')
-            for x_scaler in x_scalers:
-                data.x = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
+            
+            # TODO: check when scaler is a Encoding one (empty node may cause error)
+            if data.x.size()[0] > 0:
+                for x_scaler in x_scalers:
+                    data.x = torch.tensor(x_scaler.transform(data.x), dtype=torch.float)
         
         # edge attributes
         if 'x_edge' in self._fields:
