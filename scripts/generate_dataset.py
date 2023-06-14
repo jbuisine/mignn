@@ -6,19 +6,17 @@ import numpy as np
 from itertools import chain
 
 from mignn.dataset import PathLightDataset
+from mignn.processing.scalers import ScalersManager
+from mignn.processing import ScalerTransform, SignalEncoder
 
 import torch_geometric.transforms as GeoT
 
 from joblib import dump as skdump
-from joblib import load as skload
 
 import tqdm
 from multiprocessing.pool import ThreadPool
 
-from utils import scale_viewpoint_and_merge
-
-from mignn.processing import ScalerTransform, SignalEncoder
-from mignn.processing.scalers import ScalersManager
+from utils import scale_subset, merge_by_chunk
 
 import config as MIGNNConf
 
@@ -109,6 +107,13 @@ def main():
     # reload scalers 
     scalers_path = f'{scalers_folder}/scalers.bin'   
     print('[Scaling] start preparing scaled data...') 
+    
+    transforms_list = [ScalerTransform(scalers)]
+    
+    if MIGNNConf.ENCODING_SIZE is not None:
+        transforms_list.append(SignalEncoder(MIGNNConf.ENCODING_SIZE, MIGNNConf.ENCODING_MASK))
+    
+    applied_transforms = GeoT.Compose(transforms_list)
 
     # applied transformations over all intermediate path light dataset
     # avoid memory overhead
@@ -123,34 +128,66 @@ def main():
         test_dataset_path = f'{dataset_path}/test'
         os.makedirs(train_dataset_path, exist_ok=True)
         os.makedirs(test_dataset_path, exist_ok=True)
-        
-        # create params (train and test)
-        viewpoints_params = list([
+                
+        subset_params = list(chain(*[
+            [
                 (
-                    viewpoint_path,
+                    os.path.join(v_path, v_file),
                     scalers_path,
-                    os.path.join(output_scaled_temp_train, os.path.split(viewpoint_path)[-1]),
-                    os.path.join(train_dataset_path, os.path.split(viewpoint_path)[-1])
-                ) 
-            for viewpoint_path in train_viewpoints_folder
-        ])
+                    os.path.join(output_scaled_temp_train, os.path.split(v_path)[-1]),
+                )   
+                for v_file in os.listdir(v_path) 
+            ]
+            for v_path in train_viewpoints_folder
+        ]))
         
-        viewpoints_params += list([
+        subset_params += list(chain(*[
+            [
                 (
-                    viewpoint_path,
+                    os.path.join(v_path, v_file),
                     scalers_path,
-                    os.path.join(output_scaled_temp_test, os.path.split(viewpoint_path)[-1]),
-                    os.path.join(test_dataset_path, os.path.split(viewpoint_path)[-1])
-                ) 
-            for viewpoint_path in test_viewpoints_folder
-        ])
-    
+                    os.path.join(output_scaled_temp_test, os.path.split(v_path)[-1]),
+                )   
+                for v_file in os.listdir(v_path) 
+            ]
+            for v_path in test_viewpoints_folder
+        ]))
+        
         # multi-process scale of dataset
         pool_obj_scaled = ThreadPool()
         pool_results = []
     
-        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_viewpoint_and_merge, viewpoints_params), total=len(viewpoints_params)):
+        for result in tqdm.tqdm(pool_obj_scaled.imap(scale_subset, subset_params), total=len(subset_params)):
             pool_results.append(result)
+            
+        # merge chunk for each viewpoin
+        temp_viewpoints = [ 
+                        (
+                            os.path.join(output_scaled_temp_train, v_temp),
+                            os.path.join(train_dataset_path, v_temp)
+                        )
+                        for v_temp in os.listdir(output_scaled_temp_train)
+                    ]
+    
+        temp_viewpoints += [ 
+                        (
+                            os.path.join(output_scaled_temp_test, v_temp),
+                            os.path.join(test_dataset_path, v_temp)
+                        )
+                        for v_temp in os.listdir(output_scaled_temp_test)
+                    ]
+        
+        for idx, (temp_folder, dataset_folder) in enumerate(temp_viewpoints):
+            
+            # retrieve all scaled subset for this viewpoint
+            scaled_subsets = [ os.path.join(temp_folder, v_file) for v_file in os.listdir(temp_folder) ]
+            
+            # do chunks
+            merge_by_chunk(scaled_subsets, dataset_folder, applied_transforms)
+            
+            print(f'[Data processing] chunk progress: {(idx + 1) / len(temp_viewpoints) * 100.:.2f}%', end='\r')
+        print('[Data processing] prepared chunked data done...')
+        
     else:
         print(f'[Information] {dataset_path} already generated')
  

@@ -126,16 +126,15 @@ def load_and_save(params):
     return True
 
 
-def scale_viewpoint_and_merge(params):
+def scale_subset(params):
 
-    viewpoint_path, scalers_path, output_temp_scaled, output_dataset = params
+    subset_path, scalers_path, output_path = params
 
     # [Important] this task cannot be done by multiprocess, need to be done externaly
-    process = subprocess.Popen(["python", "scale_viewpoint.py", \
-        "--viewpoint", viewpoint_path, \
+    process = subprocess.Popen(["python", "scale_subset.py", \
+        "--subset", subset_path, \
         "--scalers", scalers_path, \
-        "--temp", output_temp_scaled, \
-        "--output", output_dataset])
+        "--output", output_path])
     process.wait()
     
     return True

@@ -73,7 +73,7 @@ def main():
         '--output', MODEL_FOLDER 
     ], check=True)
     
-    # # Run predictions from model
+    # Run predictions from model
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'predict.py', 
@@ -83,6 +83,7 @@ def main():
         '--predictions', f'{predictions_folder}_test'
     ], check=True)
     
+    # Run predictions from model
     subprocess.run([
         'taskset', '--cpu-list', f'0-{MIGNNConf.N_CORES}', 
         'python', 'predict.py', 
