@@ -4,6 +4,7 @@ import shutil
 import random
 import numpy as np
 from itertools import chain
+from joblib import load as skload
 
 from mignn.dataset import PathLightDataset
 from mignn.processing.scalers import ScalersManager
@@ -108,6 +109,7 @@ def main():
     scalers_path = f'{scalers_folder}/scalers.bin'   
     print('[Scaling] start preparing scaled data...') 
     
+    scalers = skload(scalers_path)
     transforms_list = [ScalerTransform(scalers)]
     
     if MIGNNConf.ENCODING_SIZE is not None:
