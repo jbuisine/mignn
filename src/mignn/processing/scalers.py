@@ -3,7 +3,7 @@ from abc import ABC
 import numpy as np
 import torch
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
-
+from mignn.processing.clipping import ClipTransform
 from mignn.dataset import PathLightDataset
 
 class MaskedScaler(ABC):
@@ -59,8 +59,7 @@ class MaskedRobustScaler(MaskedScaler):
     
     def __init__(self, mask: List[bool]) -> None:
         super().__init__(RobustScaler(), mask, False)
-        
-    
+            
 class MaskedLogScaler(MaskedScaler):
     
     def __init__(self, mask: List[bool], partial=True) -> None:
@@ -105,7 +104,6 @@ class MaskedLogScaler(MaskedScaler):
         X_copy[:, self._mask] = np.exp(X_copy[:, self._mask]) - 1
         return X_copy
     
-
 class ScalersManager():
     """Manage scaling preprocessing of graph data
     """
@@ -133,7 +131,7 @@ class ScalersManager():
                 if normalizer is not None:
                     self._normalizers[field].append(normalizer)
     
-    def __init_normalizer(self, normalizer_name: str, mask: List[bool]):
+    def __init_normalizer(self, normalizer_name: str, mask: List[bool or float]):
         """Get the expected Masked normalizer
         """
         
@@ -148,6 +146,9 @@ class ScalersManager():
         
         if normalizer_name == 'Log':
             return MaskedLogScaler(mask)
+        
+        if normalizer_name == 'Clip':
+            return ClipTransform(mask)
         
         return None
     
