@@ -66,27 +66,35 @@ class ModelManager():
         
         return None
     
-    def __get_all_metrics_values(self, d):
+    def __get_all_metrics_values(self, d, kind=None):
         
         if isinstance(d, dict):
-            for v in d.values():
-                yield from self.__get_all_metrics_values(v)
+            for k, v in d.items():
+                c_key = kind
+                if c_key is None and k in ['train', 'test']:
+                    c_key = k
+                    
+                yield from self.__get_all_metrics_values(v, c_key)
         elif isinstance(d, Iterable) and not isinstance(d, str): # or list, set, ... only
             for v in d:
-                yield from self.__get_all_metrics_values(v)
+                yield from self.__get_all_metrics_values(v, kind)
         else:
-            yield d 
+            yield d / self._batchs[kind]
             
-    def __get_all_metrics_keys(self, d):
+    def __get_all_metrics_keys(self, d, previous=None):
         
+
         if isinstance(d, dict):
-            for v in d.keys():
-                yield from self.__get_all_metrics_keys(v)
-        elif isinstance(d, Iterable) and not isinstance(d, str): # or list, set, ... only
-            for v in d:
-                yield from self.__get_all_metrics_keys(v)
-        else:
-            yield d 
+            for k, v in d.items():
+                if not isinstance(v, (int, float, complex)):
+                    if previous is not None:
+                        previous_keys = previous + [k]
+                    else:
+                        previous_keys = [k]
+                        
+                    yield from self.__get_all_metrics_keys(d[k], previous=previous_keys)
+                else:
+                    yield f'{"_".join(previous)}_{k}'
             
     def metrics_header(self):
         return self.__get_all_metrics_keys(self._metrics)

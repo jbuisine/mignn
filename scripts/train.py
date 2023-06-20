@@ -126,8 +126,9 @@ def main():
                 model_manager.test(data)
                 
 
-    stat_file = open(f'{stats_folder}/scores.csv', 'w', encoding='utf-8')
-    header = model_manager.metrics_header()
+    stat_file = open(f'{stats_folder}/scores.csv', 'a', encoding='utf-8')
+    header = list(model_manager.metrics_header())
+    print(f'{";".join(header)}')
     stat_file.write(f'{";".join(header)}\n')
 
     # reload model if necessary
@@ -171,19 +172,19 @@ def main():
                             
             # save using the model manager
             model_manager.save(model_folder)    
-            
+        
+        # save model stat data
+        metrics = list(model_manager.metrics_values())
+        print(f'{";".join(list(map(str, metrics)))}')
+        stat_file.write(f'{";".join(list(map(str, metrics)))}\n')
+        
         # save number of epochs done
         metadata = { 'epoch': epoch, 'best_r2': test_r2, 'best_epoch': current_best_epoch }
         with open(f'{model_folder}/metadata', 'w', encoding='utf-8') as outfile:
             json.dump(metadata, outfile)
             
-        # save model stat data
-        metrics = model_manager.metrics_values()
-        stat_file.write(f'{";".join(list(map(str, metrics)))}\n')
-
         print(f'[Epoch n°{epoch:03d}]: train: {model_manager.information("train")}, test: {model_manager.information("test")}')
         model_manager.clear_metrics()
-        
 
     stat_file.close()
 
