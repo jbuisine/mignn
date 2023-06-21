@@ -252,10 +252,10 @@ class SimpleModelManager(ModelManager):
         
     def predict(self, data, scalers) -> List[torch.Tensor]:
         
-        y_predicted = self._models['gnn'](data).detach().cpu().numpy()
+        y_predicted = self._models['gnn'](data).detach().cpu()
         
         # predict whole radiance
-        y_radiance = self._models['gnn'].radiance_from_predictions(y_predicted)
+        y_radiance = self._models['gnn'].radiance_from_predictions(y_predicted).numpy()
         
         # Radiance (indirect and direct) must be the 3 thirds features to predict
         y_total_target = data.y_total.detach().cpu().numpy()
