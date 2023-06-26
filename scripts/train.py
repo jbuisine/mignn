@@ -152,7 +152,7 @@ def main():
         current_best_epoch = int(train_metadata['best_epoch'])
         
         print(f'[Information] load previous best saved model at epoch {start_epoch}')
-        print(f'[Information] model had R²: {current_best_r2} on test dataset (@epoch n°{current_best_epoch})')
+        print(f'[Information] model had : {current_best_score} on test dataset (@epoch n°{current_best_epoch})')
     
     if start_epoch == n_epochs:
         print('[Information] no need to futhermore train model')
@@ -167,7 +167,7 @@ def main():
         
         # save best only
         if test_score < current_best_score:
-            current_best_r2 = test_score
+            current_best_score = test_score
             current_best_epoch = epoch
                             
             # save using the model manager
