@@ -170,7 +170,7 @@ class ModelManager():
         pass
 
     @abstractmethod
-    def score(self, mode, metric='r2'):
+    def score(self, mode, metric='loss'):
         pass
 
         
@@ -271,7 +271,7 @@ class SimpleModelManager(ModelManager):
         return input_radiance, y_radiance, y_total_target
 
 
-    def score(self, mode, metric='r2'):
+    def score(self, mode, metric='loss'):
         
         return self._metrics[mode]['gnn'][metric] / self._batchs[mode]
         
@@ -417,7 +417,7 @@ class SeparatedModelManager(ModelManager):
         return input_radiance, (y_direct_predicted + y_indirect_predicted), y_total_target
     
     
-    def score(self, mode, metric='r2'):
+    def score(self, mode, metric='loss'):
         
         # return global expected metric
         return self._metrics[mode]['global'][metric] / self._batchs[mode]

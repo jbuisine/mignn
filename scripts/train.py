@@ -136,7 +136,7 @@ def main():
     current_best_epoch = 1
     
     # save best only
-    current_best_r2 = torch.tensor(float('-inf'), dtype=torch.float)
+    current_best_score = torch.tensor(float('inf'), dtype=torch.float)
     
     # reload model data
     if os.path.exists(model_folder):
@@ -148,7 +148,7 @@ def main():
         start_epoch = int(train_metadata['epoch'])
         start_epoch = 0 if start_epoch < 0 else start_epoch # ensure non negative epoch
         
-        current_best_r2 = float(train_metadata['best_r2'])
+        current_best_score = float(train_metadata['best_score'])
         current_best_epoch = int(train_metadata['best_epoch'])
         
         print(f'[Information] load previous best saved model at epoch {start_epoch}')
@@ -163,11 +163,11 @@ def main():
         train(epoch, train_datasets, train_n_batchs)
         test(test_datasets)
         
-        test_r2 = model_manager.score('test')
+        test_score = model_manager.score('test')
         
         # save best only
-        if test_r2 > current_best_r2:
-            current_best_r2 = test_r2
+        if test_score < current_best_score:
+            current_best_r2 = test_score
             current_best_epoch = epoch
                             
             # save using the model manager
@@ -179,7 +179,7 @@ def main():
         stat_file.write(f'{";".join(list(map(str, metrics)))}\n')
         
         # save number of epochs done
-        metadata = { 'epoch': epoch, 'best_r2': test_r2, 'best_epoch': current_best_epoch }
+        metadata = { 'epoch': epoch, 'best_score': test_score, 'best_epoch': current_best_epoch }
         with open(f'{model_folder}/metadata', 'w', encoding='utf-8') as outfile:
             json.dump(metadata, outfile)
             
